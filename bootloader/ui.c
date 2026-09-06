@@ -7,13 +7,13 @@
 
 static const BootEntry g_entries[MAX_BOOT_ENTRIES] = {
     {
-        .title = "AuraOS - Modern Desktop Environment",
-        .description = "Start standard 64-bit kernel with full graphical compositor & multitasking",
+        .title = "Xenithra OS - High-Security Desktop Environment",
+        .description = "Protected 64-bit kernel with Anti-Hijack Guard, Private Firewall & Compositor",
         .boot_mode = 0
     },
     {
-        .title = "AuraOS - Safe Mode (Diagnostic Logging)",
-        .description = "Start with verbose kernel memory logging, single-core APIC debug mode",
+        .title = "Xenithra OS - Hardened Diagnostic Mode",
+        .description = "Verbose memory audit, SMEP/SMAP validation, and single-core APIC debug",
         .boot_mode = 1
     },
     {
@@ -36,7 +36,7 @@ static void draw_modern_logo(int cx, int cy, int size) {
     uint32_t c1 = 0x000078D4; /* Top-Left: Windows Fluent Blue */
     uint32_t c2 = 0x000086F8; /* Top-Right: Sky Accent */
     uint32_t c3 = 0x000067B8; /* Bottom-Left: Deep Azure */
-    uint32_t c4 = 0x000078D4; /* Bottom-Right */
+    uint32_t c4 = 0x0058A6FF; /* Bottom-Right: Xenithra Cyan */
 
     /* 4-pane modern Fluent tile logo */
     gop_fill_rounded_rect(cx - half, cy - half, tile, tile, 2, c1);
@@ -54,8 +54,8 @@ static void render_menu_frame(int selected_index, int remaining_ms, int total_ms
     int logo_y = 60;
     draw_modern_logo(center_x, logo_y, 44);
 
-    gop_draw_string_centered(logo_y + 36, "AuraOS Boot Manager", COLOR_TEXT_PRIMARY, 2);
-    gop_draw_string_centered(logo_y + 74, "Modern x86_64 Freestanding UEFI Environment", COLOR_TEXT_SECONDARY, 1);
+    gop_draw_string_centered(logo_y + 36, "Xenithra OS Boot Manager", COLOR_TEXT_PRIMARY, 2);
+    gop_draw_string_centered(logo_y + 74, "Next-Gen 64-bit Secure Microkernel & Graphical Compositor", COLOR_TEXT_SECONDARY, 1);
 
     /* 3. Central Selection Card */
     int card_w = 640;
@@ -137,7 +137,7 @@ static void render_menu_frame(int selected_index, int remaining_ms, int total_ms
     }
 
     /* 6. Footer Signature */
-    gop_draw_string_centered(g_gop_ctx.height - 30, "AuraOS UEFI Boot Protocol v2.0 | Press [ESC] to reboot", 0x00484F58, 1);
+    gop_draw_string_centered(g_gop_ctx.height - 30, "Xenithra OS UEFI Boot Protocol v2.0 | Protected Environment", 0x00484F58, 1);
 
     /* 7. Swap to Screen */
     gop_swap_buffers();

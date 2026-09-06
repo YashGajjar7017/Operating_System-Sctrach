@@ -96,8 +96,8 @@ EFI_STATUS gop_init(EFI_SYSTEM_TABLE *SystemTable) {
     return EFI_SUCCESS;
 }
 
-AuraFrameBuffer gop_get_framebuffer_info(void) {
-    AuraFrameBuffer fb;
+XenithraFrameBuffer gop_get_framebuffer_info(void) {
+    XenithraFrameBuffer fb;
     fb.base_address = (uint64_t)g_gop_ctx.front_buffer;
     fb.buffer_size = g_gop_ctx.buffer_size;
     fb.width = g_gop_ctx.width;

@@ -1,0 +1,60 @@
+<?xml version="1.0"?>
+<!--
+  Xenithra OS VirtualBox Machine Definition (.vbox)
+  Optimized for x86_64 Bare-Metal UEFI Boot, GOP Framebuffer, and Anti-Hijack Guard
+-->
+<VirtualBox xmlns="http://www.virtualbox.org/" version="1.19-windows">
+  <Machine uuid="{d89f419c-8512-4c28-98e6-1c25f4791a20}" name="Xenithra OS" OSType="Other_64" currentSnapshot="{00000000-0000-0000-0000-000000000000}" snapshotFolder="Snapshots" lastStateChange="2026-09-06T15:00:00Z">
+    <MediaRegistry>
+      <DVDImages>
+        <Image uuid="{a48f93e2-63b1-479a-bc3e-081e620584b1}" location="../build/xenithra.iso"/>
+      </DVDImages>
+    </MediaRegistry>
+    <ExtraData>
+      <ExtraDataItem name="GUI/LastCloseAction" value="PowerOff"/>
+      <ExtraDataItem name="GUI/LastNormalWindowPosition" value="300,150,1280,720"/>
+    </ExtraData>
+    <Hardware>
+      <CPU count="2">
+        <PAE enabled="true"/>
+        <LongMode enabled="true"/>
+        <HardwareVirtExLargePages enabled="true"/>
+      </CPU>
+      <Memory RAMSize="2048"/>
+      <Firmware type="EFI"/>
+      <HID Pointing="USBTablet" Keyboard="PS2Keyboard"/>
+      <HPET enabled="true"/>
+      <Chipset type="PIIX3"/>
+      <Boot>
+        <Order position="1" device="DVD"/>
+        <Order position="2" device="HardDisk"/>
+        <Order position="3" device="None"/>
+        <Order position="4" device="None"/>
+      </Boot>
+      <Display VRAMSize="128" monitorCount="1" accelerate3D="false"/>
+      <BIOS>
+        <IOAPIC enabled="true"/>
+        <SmbiosUuidLittleEndian enabled="true"/>
+      </BIOS>
+      <USB>
+        <Controllers>
+          <Controller name="XHCI" type="XHCI"/>
+        </Controllers>
+      </USB>
+      <Network>
+        <Adapter slot="0" enabled="true" MACAddress="080027123456" type="82540EM">
+          <NAT/>
+        </Adapter>
+      </Network>
+      <AudioAdapter controller="HDA" driver="DirectSound" enabled="false"/>
+      <RTC localOrUTC="UTC"/>
+      <StorageControllers>
+        <StorageController name="AHCI" type="AHCI" PortCount="2" useHostIOCache="false" Bootable="true">
+          <AttachedDevice passthrough="false" type="DVD" hotpluggable="false" port="0" device="0">
+            <Image uuid="{a48f93e2-63b1-479a-bc3e-081e620584b1}"/>
+          </AttachedDevice>
+        </StorageController>
+      </StorageControllers>
+    </Hardware>
+  </Machine>
+</VirtualBox>

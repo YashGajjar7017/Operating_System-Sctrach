@@ -48,7 +48,7 @@ typedef struct {
 } Elf64_Phdr;
 
 /* Global BootInfo instance */
-static AuraBootInfo g_boot_info;
+static XenithraBootInfo g_boot_info;
 
 /* Find ACPI RSDP table in UEFI Configuration Tables */
 static uint64_t find_acpi_rsdp(EFI_SYSTEM_TABLE *SystemTable) {
@@ -258,8 +258,8 @@ EFI_STATUS EFIAPI EfiMain(EFI_HANDLE ImageHandle, EFI_SYSTEM_TABLE *SystemTable)
 
     /* 4. Display Loading Screen */
     gop_draw_gradient_v(0, 0, g_gop_ctx.width, g_gop_ctx.height, 0x000B0E14, 0x00161B22);
-    gop_draw_string_centered(g_gop_ctx.height / 2 - 30, "Starting AuraOS...", COLOR_TEXT_PRIMARY, 2);
-    gop_draw_string_centered(g_gop_ctx.height / 2 + 10, "Loading kernel image & transferring control", COLOR_TEXT_SECONDARY, 1);
+    gop_draw_string_centered(g_gop_ctx.height / 2 - 30, "Starting Xenithra OS...", COLOR_TEXT_PRIMARY, 2);
+    gop_draw_string_centered(g_gop_ctx.height / 2 + 10, "Initializing security subsystem & transferring control", COLOR_TEXT_SECONDARY, 1);
     gop_swap_buffers();
 
     /* 5. Load Kernel ELF */
@@ -270,6 +270,7 @@ EFI_STATUS EFIAPI EfiMain(EFI_HANDLE ImageHandle, EFI_SYSTEM_TABLE *SystemTable)
     /* Try multiple common kernel paths on the EFI system partition */
     CHAR16 *paths[] = {
         (CHAR16*)L"\\KERNEL.ELF",
+        (CHAR16*)L"\\XENITHRA\\KERNEL.ELF",
         (CHAR16*)L"\\AURAOS\\KERNEL.ELF",
         (CHAR16*)L"\\EFI\\BOOT\\KERNEL.ELF",
         NULL
@@ -290,7 +291,7 @@ EFI_STATUS EFIAPI EfiMain(EFI_HANDLE ImageHandle, EFI_SYSTEM_TABLE *SystemTable)
     }
 
     /* 6. Populate Framebuffer info */
-    g_boot_info.magic = AURA_BOOT_MAGIC;
+    g_boot_info.magic = XENITHRA_BOOT_MAGIC;
     g_boot_info.version = 1;
     g_boot_info.boot_mode = sel.selected_mode;
     g_boot_info.framebuffer = gop_get_framebuffer_info();
@@ -355,7 +356,7 @@ EFI_STATUS EFIAPI EfiMain(EFI_HANDLE ImageHandle, EFI_SYSTEM_TABLE *SystemTable)
     }
 
     /* 9. Jump to 64-bit Kernel Entry Point (System V AMD64 ABI: RDI = BootInfo*) */
-    typedef void (*KernelEntryPoint)(AuraBootInfo *boot_info);
+    typedef void (*KernelEntryPoint)(XenithraBootInfo *boot_info);
     KernelEntryPoint kernel_main = (KernelEntryPoint)kernel_entry;
 
     kernel_main(&g_boot_info);

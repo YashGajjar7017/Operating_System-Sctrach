@@ -160,7 +160,7 @@ class FAT32Builder:
             bpb[64] = 0x80                     # Drive number
             bpb[66] = 0x29                     # Extended boot signature
             struct.pack_into('<I', bpb, 67, 0x12345678) # Volume serial number
-            bpb[71:82] = b'AURA_ESP   '       # Volume label
+            bpb[71:82] = b'XENITHRAESP'        # Volume label
             bpb[82:90] = b'FAT32   '           # System identifier
             bpb[510:512] = b'\x55\xAA'         # Signature
 
@@ -201,15 +201,15 @@ class FAT32Builder:
             if written_bytes < target_bytes:
                 f.write(b'\x00' * (target_bytes - written_bytes))
 
-        print(f"[+] Successfully generated UEFI FAT32 ESP Disk Image: {self.filename} ({os.path.getsize(self.filename)} bytes)")
+        print(f"[+] Successfully generated Xenithra UEFI ESP Disk Image: {self.filename} ({os.path.getsize(self.filename)} bytes)")
 
 def build_uefi_disk(output_img, efi_loader, kernel_elf):
     fat = FAT32Builder(output_img)
 
-    # 1. Create \EFI and \EFI\BOOT
+    # 1. Create \EFI, \EFI\BOOT, and \XENITHRA
     efi_cluster = fat.add_directory(fat.root_cluster, "EFI")
     boot_cluster = fat.add_directory(efi_cluster, "BOOT")
-    aura_cluster = fat.add_directory(fat.root_cluster, "AURAOS")
+    xen_cluster = fat.add_directory(fat.root_cluster, "XENITHRA")
 
     # 2. Add BOOTX64.EFI
     if os.path.exists(efi_loader):
@@ -225,8 +225,8 @@ def build_uefi_disk(output_img, efi_loader, kernel_elf):
         with open(kernel_elf, 'rb') as f:
             kernel_data = f.read()
         fat.add_file(fat.root_cluster, "KERNEL.ELF", kernel_data)
-        fat.add_file(aura_cluster, "KERNEL.ELF", kernel_data)
-        print(f"[+] Added \\KERNEL.ELF and \\AURAOS\\KERNEL.ELF ({len(kernel_data)} bytes)")
+        fat.add_file(xen_cluster, "KERNEL.ELF", kernel_data)
+        print(f"[+] Added \\KERNEL.ELF and \\XENITHRA\\KERNEL.ELF ({len(kernel_data)} bytes)")
     else:
         print(f"[!] Warning: {kernel_elf} not found. Skipping.")
 

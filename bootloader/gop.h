@@ -35,14 +35,14 @@ typedef struct {
     uint32_t height;
     uint32_t stride;
     uint64_t buffer_size;
-    AuraPixelFormat pixel_format;
+    XenithraPixelFormat pixel_format;
 } GopContext;
 
 extern GopContext g_gop_ctx;
 
 /* GOP Lifecycle */
 EFI_STATUS gop_init(EFI_SYSTEM_TABLE *SystemTable);
-AuraFrameBuffer gop_get_framebuffer_info(void);
+XenithraFrameBuffer gop_get_framebuffer_info(void);
 
 /* Rendering Primitives */
 void gop_clear(uint32_t color);

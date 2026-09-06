@@ -1,5 +1,5 @@
 # -----------------------------------------------------------------------------
-# AuraOS - 64-bit Graphical Operating System Makefile
+# Xenithra OS - 64-bit Graphical Operating System Makefile
 # Architecture: x86_64 | Target: UEFI PE32+ Application & Higher-Half Kernel ELF
 # -----------------------------------------------------------------------------
 
@@ -30,7 +30,7 @@ OVMF      ?= $(BUILD_DIR)/ovmf.fd
 BOOT_EFI  = $(BUILD_DIR)/BOOTX64.EFI
 KERNEL_ELF= $(BUILD_DIR)/kernel.elf
 DISK_IMG  = $(BUILD_DIR)/disk.img
-ISO_IMG   = $(BUILD_DIR)/auraos.iso
+ISO_IMG   = $(BUILD_DIR)/xenithra.iso
 
 # Source Objects
 BOOT_OBJS = $(BUILD_DIR)/boot_main.o \
@@ -40,9 +40,15 @@ BOOT_OBJS = $(BUILD_DIR)/boot_main.o \
 
 KERN_OBJS = $(BUILD_DIR)/kern_entry.o \
             $(BUILD_DIR)/kern_main.o \
+            $(BUILD_DIR)/kern_session.o \
+            $(BUILD_DIR)/kern_firewall.o \
+            $(BUILD_DIR)/kern_compositor.o \
+            $(BUILD_DIR)/kern_dom.o \
+            $(BUILD_DIR)/kern_app_firewall.o \
+            $(BUILD_DIR)/kern_app_terminal.o \
             $(BUILD_DIR)/kern_font.o
 
-.PHONY: all clean run run-iso setup_ovmf disk iso
+.PHONY: all clean run run-iso setup_ovmf disk iso bootstrap
 
 all: disk iso
 
@@ -72,7 +78,25 @@ $(BUILD_DIR)/kern_entry.o: $(KERN_DIR)/arch/x86_64/entry.asm | $(BUILD_DIR)
 	$(AS) $(ASFLAGS) $< -o $@
 
 $(BUILD_DIR)/kern_main.o: $(KERN_DIR)/main.c | $(BUILD_DIR)
-	$(CC_KERN) $(TARGET_KERN) -I$(SHARED_DIR) -c $< -o $@
+	$(CC_KERN) $(TARGET_KERN) -I$(SHARED_DIR) -I$(KERN_DIR) -c $< -o $@
+
+$(BUILD_DIR)/kern_session.o: $(KERN_DIR)/security/session.c | $(BUILD_DIR)
+	$(CC_KERN) $(TARGET_KERN) -I$(SHARED_DIR) -I$(KERN_DIR) -c $< -o $@
+
+$(BUILD_DIR)/kern_firewall.o: $(KERN_DIR)/security/firewall.c | $(BUILD_DIR)
+	$(CC_KERN) $(TARGET_KERN) -I$(SHARED_DIR) -I$(KERN_DIR) -c $< -o $@
+
+$(BUILD_DIR)/kern_compositor.o: $(KERN_DIR)/gui/compositor.c | $(BUILD_DIR)
+	$(CC_KERN) $(TARGET_KERN) -I$(SHARED_DIR) -I$(KERN_DIR) -c $< -o $@
+
+$(BUILD_DIR)/kern_dom.o: $(KERN_DIR)/gui/dom_engine.c | $(BUILD_DIR)
+	$(CC_KERN) $(TARGET_KERN) -I$(SHARED_DIR) -I$(KERN_DIR) -c $< -o $@
+
+$(BUILD_DIR)/kern_app_firewall.o: $(KERN_DIR)/apps/firewall_app.c | $(BUILD_DIR)
+	$(CC_KERN) $(TARGET_KERN) -I$(SHARED_DIR) -I$(KERN_DIR) -c $< -o $@
+
+$(BUILD_DIR)/kern_app_terminal.o: $(KERN_DIR)/apps/terminal_app.c | $(BUILD_DIR)
+	$(CC_KERN) $(TARGET_KERN) -I$(SHARED_DIR) -I$(KERN_DIR) -c $< -o $@
 
 $(BUILD_DIR)/kern_font.o: $(SHARED_DIR)/font.c | $(BUILD_DIR)
 	$(CC_KERN) $(TARGET_KERN) -I$(SHARED_DIR) -c $< -o $@
@@ -92,6 +116,9 @@ $(ISO_IMG): $(BOOT_EFI) $(KERNEL_ELF)
 	$(PYTHON) $(SCRIPTS_DIR)/build_iso.py $(ISO_IMG) $(BOOT_EFI) $(KERNEL_ELF)
 
 iso: $(ISO_IMG)
+
+bootstrap:
+	$(PYTHON) $(SCRIPTS_DIR)/bootstrap_tools.py
 
 setup_ovmf:
 	$(PYTHON) $(SCRIPTS_DIR)/download_ovmf.py

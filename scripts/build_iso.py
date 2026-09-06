@@ -28,7 +28,7 @@ def make_el_torito_catalog(efi_img_lba, efi_img_512_sectors):
     val[0] = 0x01                      # Header ID
     val[1] = 0x00                      # Platform ID (80x86)
     val[2:4] = b'\x00\x00'             # Reserved
-    id_str = b'AuraOS ElTorito'
+    id_str = b'Xenithra ElTorito'
     val[4:4+len(id_str)] = id_str
     val[30] = 0x55                     # Key byte 1
     val[31] = 0xAA                     # Key byte 2
@@ -75,8 +75,8 @@ def create_iso_descriptor_set(total_iso_sectors, boot_catalog_lba):
     pvd[1:6] = b'CD001'
     pvd[6] = 0x01                      # Version
     pvd[7] = 0x00                      # Unused
-    pvd[8:40] = b'AURAOS                          ' # System ID
-    pvd[40:72] = b'AURAOS_INSTALL                  ' # Volume ID
+    pvd[8:40] = b'XENITHRA_OS                   ' # System ID
+    pvd[40:72] = b'XENITHRA_INSTALL              ' # Volume ID
     struct.pack_into('<I', pvd, 80, total_iso_sectors) # Volume Space Size (LSB)
     struct.pack_into('>I', pvd, 84, total_iso_sectors) # Volume Space Size (MSB)
     struct.pack_into('<H', pvd, 120, 1) # Volume Set Size
@@ -114,14 +114,6 @@ def build_uefi_iso(output_iso, efi_loader, kernel_elf):
     fat_size = len(fat_data)
     fat_512_sectors = fat_size // 512
     fat_iso_sectors = (fat_size + ISO_SECTOR_SIZE - 1) // ISO_SECTOR_SIZE
-
-    # Layout of ISO:
-    # LBA 0..15: System area (16 * 2048 = 32KB)
-    # LBA 16: Primary Volume Descriptor (PVD)
-    # LBA 17: El Torito BRVD
-    # LBA 18: Terminator
-    # LBA 19: Boot Catalog
-    # LBA 20..20+fat_iso_sectors-1: FAT ESP Image (efi.img)
 
     system_sectors = 16
     pvd_lba = 16
@@ -162,10 +154,10 @@ def build_uefi_iso(output_iso, efi_loader, kernel_elf):
             pass
 
     iso_size_mb = os.path.getsize(output_iso) / (1024 * 1024)
-    print(f"[+] Bootable UEFI ISO generated successfully: {output_iso} ({iso_size_mb:.2f} MB)")
+    print(f"[+] Bootable Xenithra UEFI ISO generated successfully: {output_iso} ({iso_size_mb:.2f} MB)")
 
 if __name__ == "__main__":
-    out_iso = sys.argv[1] if len(sys.argv) > 1 else "build/auraos.iso"
+    out_iso = sys.argv[1] if len(sys.argv) > 1 else "build/xenithra.iso"
     loader = sys.argv[2] if len(sys.argv) > 2 else "build/BOOTX64.EFI"
     kernel = sys.argv[3] if len(sys.argv) > 3 else "build/kernel.elf"
     build_uefi_iso(out_iso, loader, kernel)
