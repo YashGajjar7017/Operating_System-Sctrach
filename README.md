@@ -95,18 +95,39 @@ To compile and test AuraOS:
 
 ### On Windows (PowerShell):
 ```powershell
-# Build Bootloader, Kernel, and generate FAT32 ESP Disk Image
+# Build Bootloader, Kernel, FAT32 ESP Disk Image, and shareable ISO (build/auraos.iso)
 .\build.ps1
 
-# Build and launch immediately in QEMU:
+# Test the UEFI Disk image in QEMU:
 .\build.ps1 -Run
+
+# Test the Bootable ISO image in QEMU:
+.\build.ps1 -Run -Iso
 ```
 
 ### On Linux / macOS (Makefile):
 ```bash
-# Build complete disk image
+# Build both disk.img and auraos.iso
 make
 
-# Build and launch with QEMU + OVMF
+# Build only the ISO image
+make iso
+
+# Launch QEMU with the UEFI disk image
 make run
+
+# Launch QEMU directly with the bootable ISO CD-ROM
+make run-iso
 ```
+
+---
+
+## Sharing and Virtual Machine Deployment
+
+The generated file `build/auraos.iso` is a standard **El Torito UEFI Bootable ISO 9660** image.
+
+You can directly:
+1. **Share `build/auraos.iso`** with anyone.
+2. **VirtualBox**: Create a new VM (`Type: Other`, `Version: Other/Unknown (64-bit)`), check **Enable EFI (special OSes only)** in *Settings -> System -> Motherboard*, and attach `auraos.iso` to the Optical Drive.
+3. **VMware Workstation**: Create a new VM (`Guest OS: Other 64-bit`), switch Firmware type to **UEFI** in *VM Settings -> Options -> Advanced*, and mount `auraos.iso` as the CD/DVD drive.
+4. **Flash to USB**: Use Rufus, Etcher, or `dd` to write the ISO to a physical USB thumb drive for bare-metal UEFI booting.

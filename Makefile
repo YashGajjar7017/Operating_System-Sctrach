@@ -30,6 +30,7 @@ OVMF      ?= $(BUILD_DIR)/ovmf.fd
 BOOT_EFI  = $(BUILD_DIR)/BOOTX64.EFI
 KERNEL_ELF= $(BUILD_DIR)/kernel.elf
 DISK_IMG  = $(BUILD_DIR)/disk.img
+ISO_IMG   = $(BUILD_DIR)/auraos.iso
 
 # Source Objects
 BOOT_OBJS = $(BUILD_DIR)/boot_main.o \
@@ -41,9 +42,9 @@ KERN_OBJS = $(BUILD_DIR)/kern_entry.o \
             $(BUILD_DIR)/kern_main.o \
             $(BUILD_DIR)/kern_font.o
 
-.PHONY: all clean run setup_ovmf disk
+.PHONY: all clean run run-iso setup_ovmf disk iso
 
-all: disk
+all: disk iso
 
 # 1. Create build output directory
 $(BUILD_DIR):
@@ -86,13 +87,27 @@ $(DISK_IMG): $(BOOT_EFI) $(KERNEL_ELF)
 
 disk: $(DISK_IMG)
 
+# 7. Generate Bootable UEFI ISO Image
+$(ISO_IMG): $(BOOT_EFI) $(KERNEL_ELF)
+	$(PYTHON) $(SCRIPTS_DIR)/build_iso.py $(ISO_IMG) $(BOOT_EFI) $(KERNEL_ELF)
+
+iso: $(ISO_IMG)
+
 setup_ovmf:
 	$(PYTHON) $(SCRIPTS_DIR)/download_ovmf.py
 
-# 7. Launch QEMU Emulator
+# 8. Launch QEMU Emulator (Disk or CD-ROM ISO)
 run: disk setup_ovmf
 	$(QEMU) -bios $(OVMF) \
 		-drive format=raw,file=$(DISK_IMG) \
+		-m 2G \
+		-vga std \
+		-serial stdio \
+		-no-reboot
+
+run-iso: iso setup_ovmf
+	$(QEMU) -bios $(OVMF) \
+		-cdrom $(ISO_IMG) \
 		-m 2G \
 		-vga std \
 		-serial stdio \

@@ -8,6 +8,7 @@
 
 param (
     [switch]$Run,
+    [switch]$Iso,
     [switch]$Clean,
     [string]$QemuPath = "qemu-system-x86_64"
 )
@@ -71,7 +72,7 @@ if ($Clang) {
     & clang -target x86_64-unknown-windows `
         -ffreestanding -fshort-wchar -mno-red-zone `
         -I$SharedDir -I$BootDir `
-        -nostdlib -Wl,-subsystem:efi_application -Wl,-entry:EfiMain `
+        -nostdlib "-Wl,-subsystem:efi_application" "-Wl,-entry:EfiMain" `
         -O2 -o $BootEfi $BootSources
     Write-Host "[+] BOOTX64.EFI built successfully." -ForegroundColor Green
 } else {
@@ -97,22 +98,25 @@ if ($Nasm -and $Clang) {
     if ($Lld) {
         & ld.lld -T $LinkerScript -nostdlib $KernelEntryObj $KernelMainObj $KernelFontObj -o $KernelElf
     } else {
-        & clang -target x86_64-unknown-none-elf -nostdlib -Wl,-T,$LinkerScript $KernelEntryObj $KernelMainObj $KernelFontObj -o $KernelElf
+        & clang -target x86_64-unknown-none-elf -nostdlib "-Wl,-T,$LinkerScript" $KernelEntryObj $KernelMainObj $KernelFontObj -o $KernelElf
     }
     Write-Host "[+] kernel.elf built successfully." -ForegroundColor Green
 } else {
     Write-Host "[!] Skipping kernel.elf compile (nasm / clang not present)." -ForegroundColor Red
 }
 
-# 3. Generate Disk Image
-Write-Host "`n[3/4] Packaging FAT32 UEFI ESP Disk Image..." -ForegroundColor White
+# 3. Generate Disk and ISO Images
+Write-Host "`n[3/4] Packaging FAT32 ESP Disk Image & Bootable ISO..." -ForegroundColor White
 $DiskImg = Join-Path $BuildDir "disk.img"
+$IsoImg  = Join-Path $BuildDir "auraos.iso"
 $BuildDiskScript = Join-Path $ScriptDir "build_disk.py"
+$BuildIsoScript  = Join-Path $ScriptDir "build_iso.py"
 
 if ($Python) {
     & python $BuildDiskScript $DiskImg $BootEfi $KernelElf
+    & python $BuildIsoScript $IsoImg $BootEfi $KernelElf
 } else {
-    Write-Host "[!] Python required to package disk image." -ForegroundColor Red
+    Write-Host "[!] Python required to package disk/ISO image." -ForegroundColor Red
 }
 
 # 4. Download OVMF and Run in QEMU if requested
@@ -125,11 +129,20 @@ if ($Run) {
 
     $OvmfPath = Join-Path $BuildDir "ovmf.fd"
     if (Test-Path $OvmfPath) {
-        Write-Host "[+] Starting QEMU with UEFI firmware..." -ForegroundColor Green
-        & $QemuPath -bios $OvmfPath -drive format=raw,file=$DiskImg -m 2G -vga std -serial stdio -no-reboot
+        if ($Iso) {
+            Write-Host "[+] Starting QEMU with Bootable ISO (CD-ROM)..." -ForegroundColor Green
+            & $QemuPath -bios $OvmfPath -cdrom $IsoImg -m 2G -vga std -serial stdio -no-reboot
+        } else {
+            Write-Host "[+] Starting QEMU with UEFI ESP Disk Image..." -ForegroundColor Green
+            & $QemuPath -bios $OvmfPath -drive format=raw,file=$DiskImg -m 2G -vga std -serial stdio -no-reboot
+        }
     } else {
         Write-Host "[!] OVMF firmware file not found at $OvmfPath" -ForegroundColor Red
     }
 } else {
-    Write-Host "`n[+] Build Pipeline complete. To test in QEMU, run: .\build.ps1 -Run" -ForegroundColor Cyan
+    Write-Host "`n[+] Build Pipeline complete." -ForegroundColor Cyan
+    Write-Host "    - Raw Disk Image: build/disk.img" -ForegroundColor Green
+    Write-Host "    - Shareable ISO:  build/auraos.iso" -ForegroundColor Green
+    Write-Host "    To test in QEMU:  .\build.ps1 -Run" -ForegroundColor White
+    Write-Host "    To test ISO:      .\build.ps1 -Run -Iso" -ForegroundColor White
 }
