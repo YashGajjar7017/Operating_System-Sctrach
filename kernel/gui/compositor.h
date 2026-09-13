@@ -12,8 +12,8 @@
 
 #define MAX_WINDOWS         16
 #define TITLEBAR_HEIGHT     36
-#define TASKBAR_HEIGHT      52
-#define MAX_DESKTOP_ICONS   8
+#define TASKBAR_HEIGHT      48
+#define MAX_DESKTOP_ICONS   24
 
 /* Windows 11 Fluent Dark Mica & Acrylic Palette */
 #define GUI_BG_WALLPAPER_TOP    0x00060A14 /* Deep Midnight Navy */
@@ -96,6 +96,8 @@ typedef struct {
     const char *title;
     const char *icon_tag;
     uint32_t icon_color;
+    int col; /* 0: Left col 1, 1: Left col 2, 2: Right col 1, 3: Right col 2 */
+    int row;
     void (*on_activate)(void);
 } DesktopIcon;
 
@@ -118,10 +120,14 @@ void window_move(Window *win, int new_x, int new_y);
 Window* window_get_by_tag(const char *app_tag);
 Window* window_get_focused(void);
 
-/* UI Controls & Popups */
+/* UI Controls, Popups & Power Management */
 void compositor_toggle_start_menu(void);
 void compositor_toggle_calendar(void);
 void compositor_toggle_volume(void);
+void compositor_toggle_power_menu(void);
+void system_shutdown(void);
+void system_reboot(void);
+void system_hibernate(void);
 
 /* Drawing Primitives & Fluent Graphics */
 void gui_put_pixel(int x, int y, uint32_t color);
@@ -133,7 +139,7 @@ void gui_draw_string_shadow(int x, int y, const char *str, uint32_t color, uint3
 void gui_draw_gradient_v(int x, int y, int w, int h, uint32_t top_color, uint32_t bot_color);
 void gui_draw_icon_badge(int x, int y, const char *symbol, uint32_t bg_color, uint32_t fg_color);
 
-/* Windows 11 Fluent Procedural Vector Icon Renderers (32x32 / 24x24) */
+/* Windows 11 Fluent Procedural Vector Icon Renderers */
 void gui_draw_fluent_icon_this_pc(int x, int y);
 void gui_draw_fluent_icon_explorer(int x, int y);
 void gui_draw_fluent_icon_vlc(int x, int y);
@@ -142,6 +148,13 @@ void gui_draw_fluent_icon_taskmgr(int x, int y);
 void gui_draw_fluent_icon_security(int x, int y);
 void gui_draw_fluent_icon_terminal(int x, int y);
 void gui_draw_fluent_icon_recycle(int x, int y);
+void gui_draw_fluent_icon_edge(int x, int y);
+void gui_draw_fluent_icon_chrome(int x, int y);
+void gui_draw_fluent_icon_postman(int x, int y);
+void gui_draw_fluent_icon_antigravity(int x, int y);
+void gui_draw_fluent_icon_modbus(int x, int y);
+void gui_draw_fluent_icon_text_doc(int x, int y);
+void gui_draw_fluent_icon_batch_file(int x, int y);
 void gui_draw_fluent_icon_by_tag(int x, int y, const char *tag);
 
 #endif /* _KERNEL_GUI_COMPOSITOR_H_ */

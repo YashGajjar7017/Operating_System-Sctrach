@@ -13,6 +13,21 @@
 #include "../apps/vlc_app.h"
 #include "../apps/installer_app.h"
 
+/* x86 I/O Port Helpers */
+static inline void outb(uint16_t port, uint8_t val) {
+    __asm__ volatile ("outb %0, %1" : : "a"(val), "Nd"(port));
+}
+
+static inline void outw(uint16_t port, uint16_t val) {
+    __asm__ volatile ("outw %0, %1" : : "a"(val), "Nd"(port));
+}
+
+static inline uint8_t inb(uint16_t port) {
+    uint8_t ret;
+    __asm__ volatile ("inb %1, %0" : "=a"(ret) : "Nd"(port));
+    return ret;
+}
+
 static XenithraFrameBuffer g_fb;
 static uint32_t *g_back_buffer = NULL;
 static uint32_t g_back_buffer_storage[1920 * 1080]; /* Static fallback buffer up to 1080p */
@@ -25,6 +40,8 @@ static CompositorMouseState g_mouse = {640, 360, 0, 0, 0, 0, 0};
 static uint8_t g_start_menu_open = 0;
 static uint8_t g_calendar_open = 0;
 static uint8_t g_volume_open = 0;
+static uint8_t g_power_menu_open = 0;
+static uint8_t g_is_suspended = 0;
 static int g_volume_level = 80;
 
 /* Window Dragging State */
@@ -36,7 +53,47 @@ static int g_drag_offset_y = 0;
 static int g_selected_desktop_icon = -1;
 static uint64_t g_system_ticks = 0;
 
-/* Desktop Icons Actions */
+/* Hardware Power Control Implementations */
+void system_shutdown(void) {
+    /* 1. QEMU ACPI Poweroff */
+    outw(0x604, 0x2000);
+    /* 2. Bochs & Older QEMU ACPI */
+    outw(0xB004, 0x2000);
+    /* 3. VirtualBox ACPI */
+    outw(0x4004, 0x3400);
+    outw(0x600, 0x34);
+    /* 4. Fallback: Halt CPU */
+    __asm__ volatile ("cli; hlt");
+    while (1) { __asm__ volatile ("hlt"); }
+}
+
+void system_reboot(void) {
+    /* 1. 8042 Keyboard Controller Reset Pulse */
+    uint8_t temp;
+    do {
+        temp = inb(0x64);
+        if (temp & 1) inb(0x60);
+    } while (temp & 2);
+    outb(0x64, 0xFE);
+
+    /* 2. ACPI Fast Reset Register */
+    outb(0xCF9, 0x06);
+
+    /* 3. Triple Fault Fallback */
+    __asm__ volatile ("lidt 0; int3");
+    while (1) { __asm__ volatile ("hlt"); }
+}
+
+void system_hibernate(void) {
+    g_is_suspended = 1;
+    compositor_render();
+}
+
+void compositor_toggle_power_menu(void) {
+    g_power_menu_open = !g_power_menu_open;
+}
+
+/* Desktop Icons Launch Actions */
 static void on_launch_this_pc(void)    { explorer_app_launch(); }
 static void on_launch_explorer(void)   { explorer_app_launch(); }
 static void on_launch_vlc(void)        { vlc_app_launch(); }
@@ -44,60 +101,57 @@ static void on_launch_installer(void)  { installer_app_launch(); }
 static void on_launch_taskmgr(void)    { taskmgr_app_launch(); }
 static void on_launch_firewall(void)   { firewall_app_launch(); }
 static void on_launch_terminal(void)   { terminal_app_launch(); }
-static void on_launch_recycle(void)    { explorer_app_launch(); }
 
+/* Exact Desktop Icons Definition from Reference Image 1 */
 static DesktopIcon g_desktop_icons[MAX_DESKTOP_ICONS] = {
-    {"This PC",         "PC",  GUI_ACCENT_BLUE,   on_launch_this_pc},
-    {"File Explorer",   "EX",  0x00D97706,        on_launch_explorer},
-    {"VLC Media Player","VLC", GUI_ACCENT_ORANGE, on_launch_vlc},
-    {"App Installer",   "APP", 0x000078D4,        on_launch_installer},
-    {"Task Manager",    "TM",  GUI_ACCENT_CYAN,   on_launch_taskmgr},
-    {"Security Center", "SC",  GUI_ACCENT_GREEN,  on_launch_firewall},
-    {"Terminal Shell",  "CL",  GUI_ACCENT_PURPLE, on_launch_terminal},
-    {"Recycle Bin",     "RB",  0x0064748B,        on_launch_recycle}
+    /* Left Column 1 */
+    {"This PC",          "PC",   GUI_ACCENT_BLUE,   0, 0, on_launch_this_pc},
+    {"Recycle Bin",      "RB",   0x0064748B,        0, 1, on_launch_this_pc},
+    {"Personal - Edge",  "EDGE", 0x000078D4,        0, 2, on_launch_terminal},
+    {"Google Chrome",    "CRM",  0x00EA4335,        0, 3, on_launch_terminal},
+    {"iTunes",           "ITN",  0x00EC4899,        0, 4, on_launch_vlc},
+    {"Antigravity IDE",  "AGY",  0x00A855F7,        0, 5, on_launch_terminal},
+    {"VLC media player", "VLC",  GUI_ACCENT_ORANGE, 0, 6, on_launch_vlc},
+    {"Arduino IDE",      "ARD",  0x0006B6D4,        0, 7, on_launch_terminal},
+
+    /* Left Column 2 */
+    {"Modbus Poll",      "MOD",  0x003B82F6,        1, 0, on_launch_installer},
+    {"Postman",          "PST",  0x00F97316,        1, 1, on_launch_installer},
+    {"Modbus Slave",     "MOD",  0x0010B981,        1, 2, on_launch_installer},
+    {"LocalSend",        "LCL",  0x0006B6D4,        1, 3, on_launch_installer},
+    {"Free Downlo...",   "FDM",  0x000284C7,        1, 4, on_launch_installer},
+    {"Oracle VirtualBox","VBX",  0x000078D4,        1, 5, on_launch_installer},
+
+    /* Right Column 1 */
+    {"recovery_ac...",   "DOC",  0x0038BDF8,        2, 0, on_launch_this_pc},
+    {"nodejsRe...",      "BAT",  0x0064748B,        2, 1, on_launch_terminal},
+    {"Force_Virtu...",   "DOC",  0x0038BDF8,        2, 2, on_launch_this_pc},
+    {"content.txt",      "DOC",  0x0038BDF8,        2, 3, on_launch_this_pc},
+    {"Verborse.bat",     "BAT",  0x0064748B,        2, 4, on_launch_terminal},
+
+    /* Right Column 2 */
+    {"main.txt",         "DOC",  0x0038BDF8,        3, 0, on_launch_this_pc},
+    {"Log.txt",          "DOC",  0x0038BDF8,        3, 1, on_launch_this_pc},
+    {"Games_Lis...",     "DOC",  0x0038BDF8,        3, 2, on_launch_this_pc},
+    {"link.txt",         "DOC",  0x0038BDF8,        3, 3, on_launch_this_pc},
+    {"Restart_Net...",   "RST",  0x00EF4444,        3, 4, on_launch_firewall}
 };
 
 /* Modern Windows 11 Mouse Cursor Bitmap (12x18) */
 static const uint16_t cursor_bitmap[18] = {
-    0b1000000000000000,
-    0b1100000000000000,
-    0b1110000000000000,
-    0b1111000000000000,
-    0b1111100000000000,
-    0b1111110000000000,
-    0b1111111000000000,
-    0b1111111100000000,
-    0b1111111110000000,
-    0b1111110000000000,
-    0b1101111000000000,
-    0b1000111100000000,
-    0b0000011110000000,
-    0b0000011110000000,
-    0b0000001111000000,
-    0b0000001111000000,
-    0b0000000110000000,
-    0b0000000000000000
+    0b1000000000000000, 0b1100000000000000, 0b1110000000000000, 0b1111000000000000,
+    0b1111100000000000, 0b1111110000000000, 0b1111111000000000, 0b1111111100000000,
+    0b1111111110000000, 0b1111110000000000, 0b1101111000000000, 0b1000111100000000,
+    0b0000011110000000, 0b0000011110000000, 0b0000001111000000, 0b0000001111000000,
+    0b0000000110000000, 0b0000000000000000
 };
 
 static const uint16_t cursor_shadow[18] = {
-    0b1100000000000000,
-    0b1110000000000000,
-    0b1111000000000000,
-    0b1111100000000000,
-    0b1111110000000000,
-    0b1111111000000000,
-    0b1111111100000000,
-    0b1111111110000000,
-    0b1111111111000000,
-    0b1111111100000000,
-    0b1111111110000000,
-    0b1100111110000000,
-    0b1000011111000000,
-    0b0000011111000000,
-    0b0000001111100000,
-    0b0000001111100000,
-    0b0000000111000000,
-    0b0000000011000000
+    0b1100000000000000, 0b1110000000000000, 0b1111000000000000, 0b1111100000000000,
+    0b1111110000000000, 0b1111111000000000, 0b1111111100000000, 0b1111111110000000,
+    0b1111111111000000, 0b1111111100000000, 0b1111111110000000, 0b1100111110000000,
+    0b1000011111000000, 0b0000011111000000, 0b0000001111100000, 0b0000001111100000,
+    0b0000000111000000, 0b0000000011000000
 };
 
 void compositor_init(XenithraFrameBuffer fb) {
@@ -107,6 +161,8 @@ void compositor_init(XenithraFrameBuffer fb) {
     g_start_menu_open = 0;
     g_calendar_open = 0;
     g_volume_open = 0;
+    g_power_menu_open = 0;
+    g_is_suspended = 0;
     g_mouse.x = fb.width / 2;
     g_mouse.y = fb.height / 2;
     g_mouse.left_button = 0;
@@ -237,55 +293,39 @@ void gui_draw_string_shadow(int x, int y, const char *str, uint32_t color, uint3
     gui_draw_string(x, y, str, color, scale);
 }
 
-void gui_draw_icon_badge(int x, int y, const char *symbol, uint32_t bg_color, uint32_t fg_color) {
-    gui_fill_rounded_rect(x, y, 22, 22, 5, bg_color);
-    gui_draw_string(x + 5, y + 3, symbol, fg_color, 1);
-}
-
 /* ========================================================================= */
 /* Windows 11 Fluent Vector Icon Renderers (24x24 / 32x32)                  */
 /* ========================================================================= */
 
 void gui_draw_fluent_icon_this_pc(int x, int y) {
-    /* Monitor Display */
     gui_fill_rounded_rect(x + 2, y + 2, 28, 20, 4, 0x000284C7);
     gui_fill_rounded_rect(x + 4, y + 4, 24, 15, 2, 0x0038BDF8);
-    gui_fill_rect(x + 6, y + 6, 20, 5, 0x007DD3FC); /* Gloss */
-    /* Stand */
+    gui_fill_rect(x + 6, y + 6, 20, 5, 0x007DD3FC);
     gui_fill_rect(x + 13, y + 22, 6, 5, 0x0094A3B8);
     gui_fill_rounded_rect(x + 8, y + 26, 16, 4, 2, 0x00CBD5E1);
 }
 
 void gui_draw_fluent_icon_explorer(int x, int y) {
-    /* Back folder tab */
     gui_fill_rounded_rect(x + 2, y + 4, 12, 8, 2, 0x000284C7);
-    /* Front folder body */
     gui_fill_rounded_rect(x + 2, y + 8, 28, 20, 4, 0x00F59E0B);
-    gui_fill_rect(x + 4, y + 10, 24, 6, 0x00FBBF24); /* Folder highlight */
-    /* Inner document paper */
+    gui_fill_rect(x + 4, y + 10, 24, 6, 0x00FBBF24);
     gui_fill_rounded_rect(x + 8, y + 6, 16, 8, 2, 0x00FFFFFF);
     gui_fill_rect(x + 10, y + 8, 12, 2, 0x0094A3B8);
 }
 
 void gui_draw_fluent_icon_vlc(int x, int y) {
-    /* Base ring */
     gui_fill_rounded_rect(x + 2, y + 25, 28, 6, 3, 0x00EA580C);
     gui_fill_rounded_rect(x + 4, y + 25, 24, 4, 2, 0x00F97316);
-    /* Cone tier 1 */
     gui_fill_rounded_rect(x + 5, y + 19, 22, 6, 2, 0x00EA580C);
-    gui_fill_rect(x + 7, y + 19, 18, 3, 0x00FFFFFF); /* White reflective ring */
-    /* Cone tier 2 */
+    gui_fill_rect(x + 7, y + 19, 18, 3, 0x00FFFFFF);
     gui_fill_rounded_rect(x + 8, y + 12, 16, 7, 2, 0x00F97316);
-    gui_fill_rect(x + 10, y + 12, 12, 3, 0x00FFFFFF); /* White reflective ring */
-    /* Cone tip */
+    gui_fill_rect(x + 10, y + 12, 12, 3, 0x00FFFFFF);
     gui_fill_rounded_rect(x + 12, y + 4, 8, 8, 3, 0x00FB923C);
 }
 
 void gui_draw_fluent_icon_installer(int x, int y) {
-    /* Package Box */
     gui_fill_rounded_rect(x + 3, y + 3, 26, 26, 5, 0x000078D4);
     gui_fill_rounded_rect(x + 5, y + 5, 22, 22, 3, 0x000284C7);
-    /* Arrow down / Install motif */
     gui_fill_rect(x + 13, y + 8, 6, 10, 0x00FFFFFF);
     gui_fill_rect(x + 10, y + 16, 12, 3, 0x00FFFFFF);
     gui_fill_rect(x + 12, y + 19, 8, 3, 0x00FFFFFF);
@@ -293,14 +333,11 @@ void gui_draw_fluent_icon_installer(int x, int y) {
 }
 
 void gui_draw_fluent_icon_taskmgr(int x, int y) {
-    /* Dark card */
     gui_fill_rounded_rect(x + 2, y + 2, 28, 28, 5, 0x000F172A);
     gui_draw_rect(x + 2, y + 2, 28, 28, 0x0006B6D4);
-    /* Grid lines */
     gui_fill_rect(x + 6, y + 10, 20, 1, 0x001E293B);
     gui_fill_rect(x + 6, y + 16, 20, 1, 0x001E293B);
     gui_fill_rect(x + 6, y + 22, 20, 1, 0x001E293B);
-    /* Pulse ECG line */
     gui_fill_rect(x + 5, y + 16, 4, 2, 0x0022D3EE);
     gui_fill_rect(x + 9, y + 8, 3, 10, 0x0022D3EE);
     gui_fill_rect(x + 12, y + 14, 3, 10, 0x0022D3EE);
@@ -309,10 +346,8 @@ void gui_draw_fluent_icon_taskmgr(int x, int y) {
 }
 
 void gui_draw_fluent_icon_security(int x, int y) {
-    /* Shield Body */
     gui_fill_rounded_rect(x + 3, y + 3, 26, 20, 4, 0x0010B981);
     gui_fill_rounded_rect(x + 7, y + 18, 18, 10, 5, 0x00059669);
-    /* Checkmark motif */
     gui_fill_rect(x + 9, y + 13, 3, 6, 0x00FFFFFF);
     gui_fill_rect(x + 12, y + 17, 3, 5, 0x00FFFFFF);
     gui_fill_rect(x + 15, y + 12, 3, 7, 0x00FFFFFF);
@@ -320,21 +355,62 @@ void gui_draw_fluent_icon_security(int x, int y) {
 }
 
 void gui_draw_fluent_icon_terminal(int x, int y) {
-    /* Shell Frame */
     gui_fill_rounded_rect(x + 2, y + 3, 28, 26, 4, 0x000F172A);
     gui_fill_rounded_rect(x + 2, y + 3, 28, 7, 3, 0x001E293B);
     gui_draw_rect(x + 2, y + 3, 28, 26, 0x008B5CF6);
-    /* Prompt >_ */
     gui_draw_string(x + 6, y + 11, ">_", 0x0038BDF8, 1);
 }
 
 void gui_draw_fluent_icon_recycle(int x, int y) {
-    /* Canister */
     gui_fill_rounded_rect(x + 5, y + 4, 22, 6, 2, 0x0064748B);
     gui_fill_rounded_rect(x + 7, y + 10, 18, 18, 3, 0x000284C7);
     gui_fill_rect(x + 9, y + 12, 3, 12, 0x00FFFFFF);
     gui_fill_rect(x + 15, y + 12, 3, 12, 0x00FFFFFF);
     gui_fill_rect(x + 20, y + 12, 3, 12, 0x00FFFFFF);
+}
+
+void gui_draw_fluent_icon_edge(int x, int y) {
+    gui_fill_rounded_rect(x + 3, y + 3, 26, 26, 13, 0x000078D4);
+    gui_fill_rounded_rect(x + 6, y + 6, 20, 20, 10, 0x0000A8FF);
+    gui_fill_rounded_rect(x + 11, y + 11, 10, 10, 5, 0x0010B981);
+}
+
+void gui_draw_fluent_icon_chrome(int x, int y) {
+    gui_fill_rounded_rect(x + 3, y + 3, 26, 26, 13, 0x00EA4335);
+    gui_fill_rounded_rect(x + 7, y + 7, 18, 18, 9, 0x00FBBC05);
+    gui_fill_rounded_rect(x + 11, y + 11, 10, 10, 5, 0x0034A853);
+    gui_fill_rounded_rect(x + 13, y + 13, 6, 6, 3, 0x004285F4);
+}
+
+void gui_draw_fluent_icon_postman(int x, int y) {
+    gui_fill_rounded_rect(x + 3, y + 3, 26, 26, 13, 0x00F97316);
+    gui_draw_string(x + 11, y + 8, "P", 0x00FFFFFF, 1);
+}
+
+void gui_draw_fluent_icon_antigravity(int x, int y) {
+    gui_fill_rounded_rect(x + 3, y + 3, 26, 26, 6, 0x001E1B4B);
+    gui_draw_rect(x + 3, y + 3, 26, 26, 0x00818CF8);
+    gui_draw_string(x + 9, y + 8, "A", 0x00A5B4FC, 1);
+}
+
+void gui_draw_fluent_icon_modbus(int x, int y) {
+    gui_fill_rounded_rect(x + 3, y + 3, 26, 26, 4, 0x000F172A);
+    gui_draw_rect(x + 3, y + 3, 26, 26, 0x0038BDF8);
+    gui_draw_string(x + 6, y + 8, "MB", 0x0038BDF8, 1);
+}
+
+void gui_draw_fluent_icon_text_doc(int x, int y) {
+    gui_fill_rounded_rect(x + 5, y + 2, 22, 28, 3, 0x00F1F5F9);
+    gui_fill_rect(x + 8, y + 7, 14, 2, 0x0064748B);
+    gui_fill_rect(x + 8, y + 12, 14, 2, 0x0064748B);
+    gui_fill_rect(x + 8, y + 17, 14, 2, 0x0064748B);
+    gui_fill_rect(x + 8, y + 22, 9, 2, 0x0064748B);
+}
+
+void gui_draw_fluent_icon_batch_file(int x, int y) {
+    gui_fill_rounded_rect(x + 5, y + 2, 22, 28, 3, 0x00334155);
+    gui_draw_rect(x + 5, y + 2, 22, 28, 0x0094A3B8);
+    gui_draw_string(x + 7, y + 8, "GE", 0x0038BDF8, 1);
 }
 
 void gui_draw_fluent_icon_by_tag(int x, int y, const char *tag) {
@@ -347,6 +423,14 @@ void gui_draw_fluent_icon_by_tag(int x, int y, const char *tag) {
     else if (strcmp(tag, "SC") == 0)   gui_draw_fluent_icon_security(x, y);
     else if (strcmp(tag, "CL") == 0)   gui_draw_fluent_icon_terminal(x, y);
     else if (strcmp(tag, "RB") == 0)   gui_draw_fluent_icon_recycle(x, y);
+    else if (strcmp(tag, "EDGE") == 0) gui_draw_fluent_icon_edge(x, y);
+    else if (strcmp(tag, "CRM") == 0)  gui_draw_fluent_icon_chrome(x, y);
+    else if (strcmp(tag, "PST") == 0)  gui_draw_fluent_icon_postman(x, y);
+    else if (strcmp(tag, "AGY") == 0)  gui_draw_fluent_icon_antigravity(x, y);
+    else if (strcmp(tag, "MOD") == 0)  gui_draw_fluent_icon_modbus(x, y);
+    else if (strcmp(tag, "DOC") == 0)  gui_draw_fluent_icon_text_doc(x, y);
+    else if (strcmp(tag, "BAT") == 0)  gui_draw_fluent_icon_batch_file(x, y);
+    else if (strcmp(tag, "RST") == 0)  gui_draw_fluent_icon_security(x, y);
     else gui_draw_fluent_icon_this_pc(x, y);
 }
 
@@ -427,7 +511,7 @@ void window_maximize(Window *win) {
         win->x = 0;
         win->y = 0;
         win->width = g_fb.width;
-        win->height = g_fb.height - TASKBAR_HEIGHT - 6;
+        win->height = g_fb.height - TASKBAR_HEIGHT;
         win->is_maximized = 1;
     } else {
         win->x = win->saved_x;
@@ -484,6 +568,7 @@ void compositor_toggle_start_menu(void) {
     if (g_start_menu_open) {
         g_calendar_open = 0;
         g_volume_open = 0;
+        g_power_menu_open = 0;
     }
 }
 
@@ -492,6 +577,7 @@ void compositor_toggle_calendar(void) {
     if (g_calendar_open) {
         g_start_menu_open = 0;
         g_volume_open = 0;
+        g_power_menu_open = 0;
     }
 }
 
@@ -500,6 +586,7 @@ void compositor_toggle_volume(void) {
     if (g_volume_open) {
         g_start_menu_open = 0;
         g_calendar_open = 0;
+        g_power_menu_open = 0;
     }
 }
 
@@ -511,7 +598,7 @@ void compositor_tick(void) {
 }
 
 /* ========================================================================= */
-/* Authentic Windows 11 3D Bloom Wallpaper Renderer                         */
+/* Authentic Windows 11 Dark Mode Bloom Wallpaper Renderer (Image 1)         */
 /* ========================================================================= */
 
 static void render_wallpaper(void) {
@@ -520,82 +607,87 @@ static void render_wallpaper(void) {
     int mid = h / 2;
 
     /* 1. Deep Midnight Mica Flow Gradient */
-    gui_draw_gradient_v(0, 0, w, mid, GUI_BG_WALLPAPER_TOP, GUI_BG_WALLPAPER_MID);
-    gui_draw_gradient_v(0, mid, w, h - mid, GUI_BG_WALLPAPER_MID, GUI_BG_WALLPAPER_BOT);
+    gui_draw_gradient_v(0, 0, w, mid, 0x00050812, 0x000B1322);
+    gui_draw_gradient_v(0, mid, w, h - mid, 0x000B1322, 0x0004070D);
 
     /* 2. Soft Ambient Radial Backlight Glow */
-    int cx = w / 2;
-    int cy = h / 2 - 10;
+    int cx = w / 2 + 20;
+    int cy = h / 2 + 10;
 
-    for (int r = 240; r > 0; r -= 18) {
-        uint32_t glow = blend(0x000E2448, 0x0008101E, r, 240);
+    for (int r = 260; r > 0; r -= 16) {
+        uint32_t glow = blend(0x000F2952, 0x00060E1A, r, 260);
         gui_fill_rounded_rect(cx - r * 2, cy - r, r * 4, r * 2, r, glow);
     }
 
-    /* 3. Windows 11 Bloom Silk Ribbon Petals (Procedural 3D layered folds) */
-
-    /* Layer A: Deep Royal Sapphire Background Petals */
+    /* 3. Windows 11 3D Bloom Ribbon Petals (Layered Silk Folds) */
+    /* Deep Royal Blue Back */
     for (int p = 0; p < 8; p++) {
-        int px = cx - 180 + p * 45;
-        int py = cy - 80 + (p % 3) * 30;
-        gui_fill_rounded_rect(px, py, 110, 160, 48, GUI_BLOOM_BLUE_DEEP);
+        int px = cx - 190 + p * 44;
+        int py = cy - 90 + (p % 3) * 35;
+        gui_fill_rounded_rect(px, py, 120, 180, 52, 0x00173A8A);
     }
 
-    /* Layer B: Radiant Cobalt Silk Petals */
+    /* Radiant Cobalt Middle Layer */
     for (int p = 0; p < 6; p++) {
-        int px = cx - 140 + p * 48;
-        int py = cy - 60 + ((p + 1) % 4) * 20;
-        gui_fill_rounded_rect(px, py, 95, 145, 42, GUI_BLOOM_BLUE_MID);
+        int px = cx - 150 + p * 46;
+        int py = cy - 70 + ((p + 1) % 4) * 22;
+        gui_fill_rounded_rect(px, py, 105, 155, 46, 0x001D4ED8);
     }
 
-    /* Layer C: Electric Violet & Orchid Swirls */
-    for (int p = 0; p < 4; p++) {
-        int px = cx - 90 + p * 50;
-        int py = cy - 40 + (p % 2) * 25;
-        gui_fill_rounded_rect(px, py, 75, 120, 36, (p % 2 == 0) ? GUI_BLOOM_PURPLE : GUI_BLOOM_INDIGO);
-    }
-
-    /* Layer D: Soft Sky Blue & Cyan Front Light Petals */
+    /* Electric Violet & Orchid Swirls */
     for (int p = 0; p < 5; p++) {
-        int px = cx - 110 + p * 44;
-        int py = cy - 20 + ((p * 3) % 4) * 15;
-        gui_fill_rounded_rect(px, py, 60, 95, 28, (p % 2 == 0) ? GUI_BLOOM_CYAN : GUI_BLOOM_BLUE_LIGHT);
+        int px = cx - 110 + p * 45;
+        int py = cy - 50 + (p % 2) * 28;
+        gui_fill_rounded_rect(px, py, 85, 130, 38, (p % 2 == 0) ? 0x006366F1 : 0x004338CA);
     }
 
-    /* Layer E: Inner Bloom Center Highlight */
-    gui_fill_rounded_rect(cx - 40, cy - 10, 80, 70, 24, 0x0093C5FD);
-    gui_fill_rounded_rect(cx - 20, cy + 5, 40, 40, 18, 0x00E0F2FE);
+    /* Soft Sky Blue & Radiant Cyan Front Petals */
+    for (int p = 0; p < 6; p++) {
+        int px = cx - 120 + p * 42;
+        int py = cy - 25 + ((p * 3) % 4) * 16;
+        gui_fill_rounded_rect(px, py, 68, 105, 32, (p % 2 == 0) ? 0x0038BDF8 : 0x0060A5FA);
+    }
 
-    /* Subtle Modern Typography */
-    gui_draw_string_shadow(cx - 130, h - 80, "Xenithra OS", 0x00475569, 0x000F172A, 2);
-    gui_draw_string(cx - 145, h - 55, "64-bit High-Security Fluent Workstation", 0x00334155, 1);
+    /* Inner Bloom Center Core Highlight */
+    gui_fill_rounded_rect(cx - 45, cy - 15, 90, 80, 26, 0x0093C5FD);
+    gui_fill_rounded_rect(cx - 20, cy + 2, 45, 45, 20, 0x00E0F2FE);
 }
 
 /* ========================================================================= */
-/* Desktop Fluent Shortcuts                                                 */
+/* Desktop Shortcuts (Matching Left & Right Columns from Image 1)           */
 /* ========================================================================= */
 
 static void render_desktop_icons(void) {
-    int start_x = 20;
-    int start_y = 20;
-    int icon_h = 74;
-    int icon_w = 88;
+    int start_y = 16;
+    int row_h = 70;
+    int col_w = 86;
+
+    int left_col1_x = 16;
+    int left_col2_x = 104;
+    int right_col2_x = g_fb.width - 96;
+    int right_col1_x = right_col2_x - 88;
 
     for (int i = 0; i < MAX_DESKTOP_ICONS; i++) {
-        int ix = start_x;
-        int iy = start_y + i * icon_h;
+        DesktopIcon *ic = &g_desktop_icons[i];
+        int ix = 0;
+        int iy = start_y + ic->row * row_h;
+
+        if (ic->col == 0)      ix = left_col1_x;
+        else if (ic->col == 1) ix = left_col2_x;
+        else if (ic->col == 2) ix = right_col1_x;
+        else if (ic->col == 3) ix = right_col2_x;
 
         /* Selection / Hover Highlight Card */
         if (g_selected_desktop_icon == i) {
-            gui_fill_rounded_rect(ix - 4, iy - 4, icon_w, icon_h - 2, 6, 0x001E293B);
-            gui_draw_rect(ix - 4, iy - 4, icon_w, icon_h - 2, GUI_ACCENT_BLUE);
+            gui_fill_rounded_rect(ix - 4, iy - 2, col_w, row_h - 4, 6, 0x001E293B);
+            gui_draw_rect(ix - 4, iy - 2, col_w, row_h - 4, GUI_ACCENT_BLUE);
         }
 
         /* Fluent Icon */
-        gui_draw_fluent_icon_by_tag(ix + 28, iy + 4, g_desktop_icons[i].icon_tag);
+        gui_draw_fluent_icon_by_tag(ix + 26, iy + 4, ic->icon_tag);
 
         /* Icon Title */
-        gui_draw_string_shadow(ix + 2, iy + 44, g_desktop_icons[i].title, GUI_TEXT_PRIMARY, 0x00000000, 1);
+        gui_draw_string_shadow(ix + 2, iy + 40, ic->title, GUI_TEXT_PRIMARY, 0x00000000, 1);
     }
 }
 
@@ -611,7 +703,7 @@ static void render_window_frame(Window *win) {
     int ww = win->width;
     int wh = win->height;
 
-    /* 1. Window Drop Shadow */
+    /* 1. Drop Shadow */
     gui_fill_rounded_rect(wx + 4, wy + 4, ww + 2, wh + 2, 8, 0x0004070E);
 
     /* 2. Window Main Mica Body */
@@ -634,7 +726,6 @@ static void render_window_frame(Window *win) {
     int max_x   = close_x - btn_w;
     int min_x   = max_x - btn_w;
 
-    /* Check hover over controls for dynamic feedback */
     int mx = g_mouse.x;
     int my = g_mouse.y;
 
@@ -648,11 +739,7 @@ static void render_window_frame(Window *win) {
     if (mx >= max_x && mx < close_x && my >= wy && my < wy + TITLEBAR_HEIGHT) {
         gui_fill_rounded_rect(max_x + 2, wy + 4, btn_w - 4, TITLEBAR_HEIGHT - 8, 4, GUI_BG_CARD_HOVER);
     }
-    if (win->is_maximized) {
-        gui_draw_string(max_x + 16, wy + 10, "r", GUI_TEXT_PRIMARY, 1);
-    } else {
-        gui_draw_string(max_x + 16, wy + 10, "o", GUI_TEXT_PRIMARY, 1);
-    }
+    gui_draw_string(max_x + 16, wy + 10, win->is_maximized ? "r" : "o", GUI_TEXT_PRIMARY, 1);
 
     /* Close button */
     if (mx >= close_x && mx < wx + ww && my >= wy && my < wy + TITLEBAR_HEIGHT) {
@@ -674,112 +761,122 @@ static void render_window_frame(Window *win) {
 }
 
 /* ========================================================================= */
-/* Centered Windows 11 Floating Acrylic Taskbar Dock                         */
+/* Windows 11 Taskbar Dock (Matching Reference Image 1)                      */
 /* ========================================================================= */
 
 static void render_taskbar(void) {
     int ty = g_fb.height - TASKBAR_HEIGHT;
     int tw = g_fb.width;
 
-    /* 1. Acrylic Taskbar Surface */
-    gui_fill_rect(0, ty, tw, TASKBAR_HEIGHT, GUI_BG_TASKBAR);
-    gui_draw_rect(0, ty, tw, 1, GUI_BG_TASKBAR_BORDER);
+    /* Taskbar Acrylic Surface */
+    gui_fill_rect(0, ty, tw, TASKBAR_HEIGHT, 0x00101624);
+    gui_draw_rect(0, ty, tw, 1, 0x001E293B);
 
-    /* Count active windows to center the dock icons */
-    int active_win_count = 0;
-    for (int i = 0; i < MAX_WINDOWS; i++) {
-        if (g_windows[i].id != 0 && g_windows[i].is_visible) {
-            active_win_count++;
-        }
+    /* Left / Center Pinned Taskbar Apps */
+    int dock_x = 12;
+    int icon_btn_w = 40;
+    int icon_btn_h = 38;
+    int start_y = ty + 5;
+
+    /* 1. Windows 4-Tile Start Button */
+    gui_fill_rounded_rect(dock_x, start_y, icon_btn_w, icon_btn_h, 6, g_start_menu_open ? GUI_BG_CARD_HOVER : 0x00101624);
+    if (g_start_menu_open) gui_draw_rect(dock_x, start_y, icon_btn_w, icon_btn_h, GUI_ACCENT_BLUE);
+    gui_fill_rect(dock_x + 11, start_y + 10, 8, 7, GUI_ACCENT_CYAN);
+    gui_fill_rect(dock_x + 21, start_y + 10, 8, 7, GUI_ACCENT_CYAN);
+    gui_fill_rect(dock_x + 11, start_y + 19, 8, 7, GUI_ACCENT_CYAN);
+    gui_fill_rect(dock_x + 21, start_y + 19, 8, 7, GUI_ACCENT_CYAN);
+    dock_x += icon_btn_w + 4;
+
+    /* 2. Search Magnifier Button */
+    gui_fill_rounded_rect(dock_x, start_y, icon_btn_w, icon_btn_h, 6, 0x00101624);
+    gui_draw_string(dock_x + 14, start_y + 11, "O", GUI_TEXT_PRIMARY, 1);
+    dock_x += icon_btn_w + 4;
+
+    /* 3. Edge Browser */
+    gui_fill_rounded_rect(dock_x, start_y, icon_btn_w, icon_btn_h, 6, 0x00101624);
+    gui_draw_fluent_icon_edge(dock_x + 5, start_y + 4);
+    dock_x += icon_btn_w + 4;
+
+    /* 4. Microsoft Store */
+    gui_fill_rounded_rect(dock_x, start_y, icon_btn_w, icon_btn_h, 6, 0x00101624);
+    gui_draw_fluent_icon_installer(dock_x + 5, start_y + 4);
+    dock_x += icon_btn_w + 4;
+
+    /* 5. File Explorer (with active indicator if open) */
+    Window *exp_win = window_get_by_tag("explorer");
+    uint32_t exp_bg = (exp_win && exp_win->is_focused && !exp_win->is_minimized) ? GUI_BG_CARD_HOVER : 0x00101624;
+    gui_fill_rounded_rect(dock_x, start_y, icon_btn_w, icon_btn_h, 6, exp_bg);
+    gui_draw_fluent_icon_explorer(dock_x + 5, start_y + 4);
+    if (exp_win && exp_win->id != 0) {
+        gui_fill_rounded_rect(dock_x + 14, ty + TASKBAR_HEIGHT - 3, 12, 2, 1, GUI_ACCENT_BLUE);
+    }
+    dock_x += icon_btn_w + 4;
+
+    /* 6. Chrome */
+    gui_fill_rounded_rect(dock_x, start_y, icon_btn_w, icon_btn_h, 6, 0x00101624);
+    gui_draw_fluent_icon_chrome(dock_x + 5, start_y + 4);
+    dock_x += icon_btn_w + 4;
+
+    /* 7. Task Manager / Terminal */
+    Window *tm_win = window_get_by_tag("taskmgr");
+    gui_fill_rounded_rect(dock_x, start_y, icon_btn_w, icon_btn_h, 6, (tm_win && tm_win->is_focused) ? GUI_BG_CARD_HOVER : 0x00101624);
+    gui_draw_fluent_icon_taskmgr(dock_x + 5, start_y + 4);
+    if (tm_win && tm_win->id != 0) {
+        gui_fill_rounded_rect(dock_x + 14, ty + TASKBAR_HEIGHT - 3, 12, 2, 1, GUI_ACCENT_CYAN);
+    }
+    dock_x += icon_btn_w + 4;
+
+    /* 8. Antigravity IDE */
+    gui_fill_rounded_rect(dock_x, start_y, icon_btn_w, icon_btn_h, 6, 0x00101624);
+    gui_draw_fluent_icon_antigravity(dock_x + 5, start_y + 4);
+    dock_x += icon_btn_w + 4;
+
+    /* 9. USB / Modbus Tunnel */
+    gui_fill_rounded_rect(dock_x, start_y, icon_btn_w, icon_btn_h, 6, 0x00101624);
+    gui_draw_fluent_icon_modbus(dock_x + 5, start_y + 4);
+    dock_x += icon_btn_w + 4;
+
+    /* 10. VLC Media Player */
+    Window *vlc_win = window_get_by_tag("vlc");
+    gui_fill_rounded_rect(dock_x, start_y, icon_btn_w, icon_btn_h, 6, (vlc_win && vlc_win->is_focused) ? GUI_BG_CARD_HOVER : 0x00101624);
+    gui_draw_fluent_icon_vlc(dock_x + 5, start_y + 4);
+    if (vlc_win && vlc_win->id != 0) {
+        gui_fill_rounded_rect(dock_x + 14, ty + TASKBAR_HEIGHT - 3, 12, 2, 1, GUI_ACCENT_ORANGE);
     }
 
-    /* Center Dock Calculations */
-    int start_btn_w = 44;
-    int search_pill_w = 170;
-    int app_btn_w = 46;
-    int total_dock_w = start_btn_w + 8 + search_pill_w + 12 + active_win_count * (app_btn_w + 6);
-    int dock_x = (tw - total_dock_w) / 2;
-    if (dock_x < 12) dock_x = 12;
+    /* Right System Tray (Matching Image 1) */
+    int tray_right = tw - 10;
 
-    /* 1.1 Windows 11 Start Button (4 Cyan Tiles) */
-    int start_y = ty + 6;
-    gui_fill_rounded_rect(dock_x, start_y, start_btn_w, 40, 6, g_start_menu_open ? GUI_BG_CARD_HOVER : GUI_BG_TASKBAR);
-    if (g_start_menu_open) {
-        gui_draw_rect(dock_x, start_y, start_btn_w, 40, GUI_ACCENT_BLUE);
-    }
+    /* Notification Center Speech Bubble */
+    gui_fill_rounded_rect(tray_right - 26, ty + 10, 24, 28, 4, 0x00101624);
+    gui_draw_string(tray_right - 20, ty + 16, "[]", GUI_TEXT_SECONDARY, 1);
 
-    gui_fill_rect(dock_x + 12, start_y + 11, 8, 7, GUI_ACCENT_CYAN);
-    gui_fill_rect(dock_x + 23, start_y + 11, 8, 7, GUI_ACCENT_CYAN);
-    gui_fill_rect(dock_x + 12, start_y + 21, 8, 7, GUI_ACCENT_CYAN);
-    gui_fill_rect(dock_x + 23, start_y + 21, 8, 7, GUI_ACCENT_CYAN);
+    /* Clock & Date (12:19 PM / 2026-09-13) */
+    int clock_w = 88;
+    int clock_x = tray_right - 30 - clock_w;
+    gui_fill_rounded_rect(clock_x, ty + 4, clock_w, 40, 6, g_calendar_open ? GUI_BG_CARD_HOVER : 0x00101624);
+    gui_draw_string(clock_x + 8, ty + 8, "12:19 PM", GUI_TEXT_PRIMARY, 1);
+    gui_draw_string(clock_x + 8, ty + 23, "2026-09-13", GUI_TEXT_MUTED, 1);
 
-    /* 1.2 Search Pill */
-    int search_x = dock_x + start_btn_w + 8;
-    gui_fill_rounded_rect(search_x, start_y, search_pill_w, 40, 20, GUI_BG_INPUT);
-    gui_draw_rect(search_x, start_y, search_pill_w, 40, GUI_BORDER_COLOR);
-    gui_draw_string(search_x + 14, start_y + 12, "Search", GUI_TEXT_MUTED, 1);
+    /* Language Indicator ENG */
+    int eng_x = clock_x - 38;
+    gui_fill_rounded_rect(eng_x, ty + 10, 34, 28, 4, 0x00101624);
+    gui_draw_string(eng_x + 6, ty + 16, "ENG", GUI_TEXT_SECONDARY, 1);
 
-    /* 1.3 Running Application Dock Icons */
-    int cur_app_x = search_x + search_pill_w + 12;
-    for (int i = 0; i < MAX_WINDOWS; i++) {
-        Window *w = &g_windows[i];
-        if (w->id != 0 && w->is_visible) {
-            uint32_t bg = (w->is_focused && !w->is_minimized) ? GUI_BG_CARD_HOVER : GUI_BG_TASKBAR;
-            gui_fill_rounded_rect(cur_app_x, start_y, app_btn_w, 40, 6, bg);
-            if (w->is_focused && !w->is_minimized) {
-                gui_draw_rect(cur_app_x, start_y, app_btn_w, 40, GUI_BORDER_COLOR);
-            }
+    /* WiFi & Audio & Battery Combined Pill */
+    int net_vol_x = eng_x - 76;
+    gui_fill_rounded_rect(net_vol_x, ty + 8, 72, 32, 6, (g_volume_open) ? GUI_BG_CARD_HOVER : 0x00101624);
+    gui_draw_string(net_vol_x + 8, ty + 15, "W", GUI_ACCENT_CYAN, 1);
+    gui_draw_string(net_vol_x + 28, ty + 15, "V", GUI_TEXT_PRIMARY, 1);
+    gui_draw_string(net_vol_x + 48, ty + 15, "B", GUI_ACCENT_GREEN, 1);
 
-            /* Draw App Fluent Icon */
-            gui_draw_fluent_icon_by_tag(cur_app_x + 7, start_y + 5, w->app_tag);
-
-            /* Active Glowing Blue Indicator Pill Underneath */
-            if (!w->is_minimized) {
-                int pill_w = w->is_focused ? 20 : 8;
-                gui_fill_rounded_rect(cur_app_x + (app_btn_w - pill_w) / 2, ty + TASKBAR_HEIGHT - 4, pill_w, 3, 1, GUI_ACCENT_BLUE);
-            }
-
-            cur_app_x += app_btn_w + 6;
-        }
-    }
-
-    /* 1.4 System Tray (Right Edge) */
-    int tray_right = tw - 12;
-
-    /* Desktop Show Bar (Rightmost line) */
-    gui_fill_rect(tray_right - 4, ty + 12, 2, 28, GUI_TEXT_MUTED);
-
-    /* Clock & Date Widget */
-    int clock_w = 90;
-    int clock_x = tray_right - 8 - clock_w;
-    gui_fill_rounded_rect(clock_x, ty + 6, clock_w, 40, 6, g_calendar_open ? GUI_BG_CARD_HOVER : GUI_BG_TASKBAR);
-    gui_draw_string(clock_x + 12, ty + 10, "11:30 AM", GUI_TEXT_PRIMARY, 1);
-    gui_draw_string(clock_x + 12, ty + 24, "9/13/2026", GUI_TEXT_MUTED, 1);
-
-    /* Security Guard Badge */
-    int sec_x = clock_x - 34;
-    gui_fill_rounded_rect(sec_x, ty + 10, 28, 32, 4, 0x0010B981);
-    gui_draw_string(sec_x + 9, ty + 18, "S", 0x00FFFFFF, 1);
-
-    /* Battery Widget */
-    int bat_x = sec_x - 36;
-    gui_fill_rounded_rect(bat_x, ty + 14, 26, 22, 3, GUI_BG_CARD);
-    gui_draw_rect(bat_x, ty + 14, 26, 22, GUI_BORDER_COLOR);
-    gui_fill_rect(bat_x + 2, ty + 16, 20, 18, GUI_ACCENT_GREEN);
-
-    /* Master Volume Widget */
-    int vol_x = bat_x - 34;
-    gui_fill_rounded_rect(vol_x, ty + 10, 28, 32, 4, g_volume_open ? GUI_BG_CARD_HOVER : GUI_BG_TASKBAR);
-    gui_draw_string(vol_x + 8, ty + 18, "V", GUI_TEXT_PRIMARY, 1);
-
-    /* WiFi Network Widget */
-    int net_x = vol_x - 34;
-    gui_fill_rounded_rect(net_x, ty + 10, 28, 32, 4, GUI_BG_TASKBAR);
-    gui_draw_string(net_x + 8, ty + 18, "N", GUI_ACCENT_CYAN, 1);
+    /* Chevron Tray Button ^ */
+    int chev_x = net_vol_x - 24;
+    gui_draw_string(chev_x + 6, ty + 16, "^", GUI_TEXT_MUTED, 1);
 }
 
 /* ========================================================================= */
-/* Windows 11 Centered Start Menu Flyout                                     */
+/* Windows 11 Start Menu & Power Flyout                                      */
 /* ========================================================================= */
 
 static void render_start_menu(void) {
@@ -787,8 +884,8 @@ static void render_start_menu(void) {
 
     int sm_w = 480;
     int sm_h = 540;
-    int sm_x = (g_fb.width - sm_w) / 2;
-    int sm_y = g_fb.height - TASKBAR_HEIGHT - sm_h - 12;
+    int sm_x = 12;
+    int sm_y = g_fb.height - TASKBAR_HEIGHT - sm_h - 10;
 
     /* Start Menu Acrylic Card Body */
     gui_fill_rounded_rect(sm_x, sm_y, sm_w, sm_h, 12, GUI_BG_STARTMENU);
@@ -802,10 +899,10 @@ static void render_start_menu(void) {
     /* Pinned Section */
     gui_draw_string(sm_x + 24, sm_y + 70, "Pinned", GUI_TEXT_PRIMARY, 1);
 
-    const char *pinned_tags[] = {"EX", "VLC", "APP", "TM", "SC", "CL", "PC", "RB"};
+    const char *pinned_tags[] = {"EX", "VLC", "APP", "TM", "SC", "CL", "EDGE", "CRM"};
     const char *pinned_names[] = {
         "File Explorer", "VLC Player",   "App Installer", "Task Manager",
-        "Security Guard","Terminal",     "This PC",       "Recycle Bin"
+        "Security Center","Terminal",    "Microsoft Edge","Google Chrome"
     };
 
     for (int i = 0; i < 8; i++) {
@@ -817,16 +914,15 @@ static void render_start_menu(void) {
         gui_fill_rounded_rect(px, py, 102, 70, 8, GUI_BG_CARD);
         gui_draw_rect(px, py, 102, 70, GUI_BORDER_COLOR);
 
-        /* Fluent Icon */
         gui_draw_fluent_icon_by_tag(px + 36, py + 8, pinned_tags[i]);
         gui_draw_string(px + 6, py + 48, pinned_names[i], GUI_TEXT_SECONDARY, 1);
     }
 
-    /* Recommended / Recent Section */
+    /* Recommended Section */
     gui_draw_string(sm_x + 24, sm_y + 276, "Recommended", GUI_TEXT_PRIMARY, 1);
     const char *recent[] = {
+        "main.txt            - Desktop Document",
         "matrix_intro_64.mp4 - VLC Player",
-        "vlc_setup_x64.exe   - 64-bit App Installer",
         "firewall.rules      - Security Center"
     };
 
@@ -848,8 +944,31 @@ static void render_start_menu(void) {
     gui_draw_string(sm_x + 64, ubar_y + 30, "Ring 0 Full Privilege", GUI_ACCENT_GREEN, 1);
 
     /* Power Button */
-    gui_fill_rounded_rect(sm_x + sm_w - 48, ubar_y + 11, 34, 34, 6, GUI_BG_CARD);
+    gui_fill_rounded_rect(sm_x + sm_w - 48, ubar_y + 11, 34, 34, 6, g_power_menu_open ? GUI_BG_CARD_HOVER : GUI_BG_CARD);
     gui_draw_string(sm_x + sm_w - 36, ubar_y + 19, "P", GUI_ACCENT_RED, 1);
+
+    /* Power Options Flyout Menu */
+    if (g_power_menu_open) {
+        int pw_w = 160;
+        int pw_h = 120;
+        int pw_x = sm_x + sm_w - pw_w - 10;
+        int pw_y = ubar_y - pw_h - 6;
+
+        gui_fill_rounded_rect(pw_x, pw_y, pw_w, pw_h, 8, 0x00131C2C);
+        gui_draw_rect(pw_x, pw_y, pw_w, pw_h, GUI_ACCENT_RED);
+
+        /* Sleep / Hibernate Option */
+        gui_fill_rounded_rect(pw_x + 6, pw_y + 8, pw_w - 12, 32, 4, GUI_BG_CARD);
+        gui_draw_string(pw_x + 16, pw_y + 16, "zZ  Hibernate / Sleep", GUI_ACCENT_CYAN, 1);
+
+        /* Shut Down Option */
+        gui_fill_rounded_rect(pw_x + 6, pw_y + 44, pw_w - 12, 32, 4, GUI_BG_CARD);
+        gui_draw_string(pw_x + 16, pw_y + 52, "(!) Shut down (ACPI)", GUI_ACCENT_RED, 1);
+
+        /* Restart Option */
+        gui_fill_rounded_rect(pw_x + 6, pw_y + 80, pw_w - 12, 32, 4, GUI_BG_CARD);
+        gui_draw_string(pw_x + 16, pw_y + 88, "[R] Restart (Reset)", GUI_ACCENT_AMBER, 1);
+    }
 }
 
 /* ========================================================================= */
@@ -862,7 +981,7 @@ static void render_calendar_popup(void) {
     int cal_w = 280;
     int cal_h = 300;
     int cal_x = g_fb.width - cal_w - 12;
-    int cal_y = g_fb.height - TASKBAR_HEIGHT - cal_h - 12;
+    int cal_y = g_fb.height - TASKBAR_HEIGHT - cal_h - 10;
 
     gui_fill_rounded_rect(cal_x, cal_y, cal_w, cal_h, 12, GUI_BG_STARTMENU);
     gui_draw_rect(cal_x, cal_y, cal_w, cal_h, GUI_ACCENT_BLUE);
@@ -897,15 +1016,14 @@ static void render_volume_popup(void) {
 
     int vol_w = 270;
     int vol_h = 96;
-    int vol_x = g_fb.width - vol_w - 80;
-    int vol_y = g_fb.height - TASKBAR_HEIGHT - vol_h - 12;
+    int vol_x = g_fb.width - vol_w - 120;
+    int vol_y = g_fb.height - TASKBAR_HEIGHT - vol_h - 10;
 
     gui_fill_rounded_rect(vol_x, vol_y, vol_w, vol_h, 12, GUI_BG_STARTMENU);
     gui_draw_rect(vol_x, vol_y, vol_w, vol_h, GUI_ACCENT_BLUE);
 
     gui_draw_string(vol_x + 18, vol_y + 16, "Master Audio Output", GUI_TEXT_PRIMARY, 1);
 
-    /* Volume Slider Track */
     gui_fill_rounded_rect(vol_x + 18, vol_y + 46, 180, 8, 4, GUI_BG_INPUT);
     gui_fill_rounded_rect(vol_x + 18, vol_y + 46, (180 * g_volume_level) / 100, 8, 4, GUI_ACCENT_BLUE);
     gui_fill_rounded_rect(vol_x + 14 + (180 * g_volume_level) / 100, vol_y + 40, 16, 20, 8, 0x00FFFFFF);
@@ -916,11 +1034,16 @@ static void render_volume_popup(void) {
     gui_draw_string(vol_x + 210, vol_y + 42, num, GUI_TEXT_PRIMARY, 1);
 }
 
+static void render_suspended_overlay(void) {
+    gui_fill_rect(0, 0, g_fb.width, g_fb.height, 0x00020408);
+    gui_draw_string(g_fb.width / 2 - 180, g_fb.height / 2 - 20, "Xenithra OS Suspended (Low-Power ACPI S3)", GUI_ACCENT_CYAN, 1);
+    gui_draw_string(g_fb.width / 2 - 140, g_fb.height / 2 + 10, "Click mouse or press key to resume...", GUI_TEXT_MUTED, 1);
+}
+
 static void render_mouse_cursor(void) {
     int mx = g_mouse.x;
     int my = g_mouse.y;
 
-    /* Drop shadow */
     for (int row = 0; row < 18; row++) {
         uint16_t bits = cursor_shadow[row];
         for (int col = 0; col < 12; col++) {
@@ -930,7 +1053,6 @@ static void render_mouse_cursor(void) {
         }
     }
 
-    /* Main cursor body */
     for (int row = 0; row < 18; row++) {
         uint16_t bits = cursor_bitmap[row];
         for (int col = 0; col < 12; col++) {
@@ -948,31 +1070,36 @@ static void render_mouse_cursor(void) {
 void compositor_render(void) {
     if (!g_fb.base_address || !g_back_buffer) return;
 
-    /* 1. Desktop 3D Bloom Wallpaper */
-    render_wallpaper();
+    if (g_is_suspended) {
+        render_suspended_overlay();
+        render_mouse_cursor();
+    } else {
+        /* 1. Desktop 3D Bloom Wallpaper */
+        render_wallpaper();
 
-    /* 2. Desktop Shortcuts */
-    render_desktop_icons();
+        /* 2. Desktop Shortcuts */
+        render_desktop_icons();
 
-    /* 3. Render Windows in Z-Order (from lowest z to highest z) */
-    for (int z = 0; z < g_window_count + 16; z++) {
-        for (int i = 0; i < MAX_WINDOWS; i++) {
-            if (g_windows[i].id != 0 && g_windows[i].z_order == z) {
-                render_window_frame(&g_windows[i]);
+        /* 3. Render Windows in Z-Order */
+        for (int z = 0; z < g_window_count + 16; z++) {
+            for (int i = 0; i < MAX_WINDOWS; i++) {
+                if (g_windows[i].id != 0 && g_windows[i].z_order == z) {
+                    render_window_frame(&g_windows[i]);
+                }
             }
         }
+
+        /* 4. Windows 11 Taskbar */
+        render_taskbar();
+
+        /* 5. Start Menu & Popups */
+        render_start_menu();
+        render_calendar_popup();
+        render_volume_popup();
+
+        /* 6. Mouse Cursor */
+        render_mouse_cursor();
     }
-
-    /* 4. Windows 11 Centered Taskbar Dock */
-    render_taskbar();
-
-    /* 5. Start Menu & Popups */
-    render_start_menu();
-    render_calendar_popup();
-    render_volume_popup();
-
-    /* 6. Mouse Cursor */
-    render_mouse_cursor();
 
     /* 7. Fast 64-bit Blit to GOP Framebuffer */
     uint64_t *src = (uint64_t*)g_back_buffer;
@@ -998,6 +1125,13 @@ void compositor_update_mouse(int x, int y, uint8_t left_btn, uint8_t right_btn, 
     uint8_t left_pressed  = left_btn && !g_mouse.prev_left;
     uint8_t left_released = !left_btn && g_mouse.prev_left;
 
+    if (g_is_suspended && left_pressed) {
+        g_is_suspended = 0;
+        compositor_render();
+        g_mouse.prev_left = left_btn;
+        return;
+    }
+
     /* Window Dragging Update */
     if (g_drag_window) {
         if (left_btn) {
@@ -1017,85 +1151,123 @@ void compositor_update_mouse(int x, int y, uint8_t left_btn, uint8_t right_btn, 
         /* 1. Check Taskbar Clicks */
         if (y >= (int)g_fb.height - TASKBAR_HEIGHT) {
             int tw = g_fb.width;
-            int active_win_count = 0;
-            for (int i = 0; i < MAX_WINDOWS; i++) {
-                if (g_windows[i].id != 0 && g_windows[i].is_visible) active_win_count++;
-            }
-
-            int start_btn_w = 44;
-            int search_pill_w = 170;
-            int app_btn_w = 46;
-            int total_dock_w = start_btn_w + 8 + search_pill_w + 12 + active_win_count * (app_btn_w + 6);
-            int dock_x = (tw - total_dock_w) / 2;
-            if (dock_x < 12) dock_x = 12;
 
             /* Start button click */
-            if (x >= dock_x && x <= dock_x + start_btn_w) {
+            if (x >= 12 && x <= 56) {
                 compositor_toggle_start_menu();
                 g_mouse.prev_left = left_btn;
-                g_mouse.prev_right = right_btn;
                 compositor_render();
                 return;
             }
 
-            /* Search pill click */
-            if (x >= dock_x + start_btn_w + 8 && x <= dock_x + start_btn_w + 8 + search_pill_w) {
-                compositor_toggle_start_menu();
-                g_mouse.prev_left = left_btn;
-                g_mouse.prev_right = right_btn;
-                compositor_render();
-                return;
-            }
-
-            /* Running App Dock Icons click */
-            int cur_app_x = dock_x + start_btn_w + 8 + search_pill_w + 12;
-            for (int i = 0; i < MAX_WINDOWS; i++) {
-                Window *w = &g_windows[i];
-                if (w->id != 0 && w->is_visible) {
-                    if (x >= cur_app_x && x <= cur_app_x + app_btn_w) {
-                        if (w->is_minimized) {
-                            window_restore(w);
-                        } else if (w->is_focused) {
-                            window_minimize(w);
-                        } else {
-                            window_focus(w);
-                        }
-                        g_mouse.prev_left = left_btn;
-                        g_mouse.prev_right = right_btn;
-                        compositor_render();
-                        return;
-                    }
-                    cur_app_x += app_btn_w + 6;
+            /* Explorer icon click */
+            if (x >= 140 && x <= 180) {
+                Window *w = window_get_by_tag("explorer");
+                if (w) {
+                    if (w->is_minimized) window_restore(w);
+                    else if (w->is_focused) window_minimize(w);
+                    else window_focus(w);
+                } else {
+                    explorer_app_launch();
                 }
+                g_mouse.prev_left = left_btn;
+                compositor_render();
+                return;
             }
 
-            /* System tray clicks */
-            if (x >= tw - 110 && x <= tw - 12) {
+            /* Task Manager click */
+            if (x >= 220 && x <= 260) {
+                Window *w = window_get_by_tag("taskmgr");
+                if (w) {
+                    if (w->is_minimized) window_restore(w);
+                    else if (w->is_focused) window_minimize(w);
+                    else window_focus(w);
+                } else {
+                    taskmgr_app_launch();
+                }
+                g_mouse.prev_left = left_btn;
+                compositor_render();
+                return;
+            }
+
+            /* VLC click */
+            if (x >= 340 && x <= 380) {
+                Window *w = window_get_by_tag("vlc");
+                if (w) {
+                    if (w->is_minimized) window_restore(w);
+                    else if (w->is_focused) window_minimize(w);
+                    else window_focus(w);
+                } else {
+                    vlc_app_launch();
+                }
+                g_mouse.prev_left = left_btn;
+                compositor_render();
+                return;
+            }
+
+            /* Clock click */
+            if (x >= tw - 120 && x <= tw - 34) {
                 compositor_toggle_calendar();
                 g_mouse.prev_left = left_btn;
-                g_mouse.prev_right = right_btn;
                 compositor_render();
                 return;
             }
 
-            if (x >= tw - 200 && x <= tw - 160) {
+            /* Volume/WiFi click */
+            if (x >= tw - 240 && x <= tw - 160) {
                 compositor_toggle_volume();
                 g_mouse.prev_left = left_btn;
-                g_mouse.prev_right = right_btn;
                 compositor_render();
                 return;
             }
         }
 
-        /* 2. Check Start Menu Items Clicks */
+        /* 2. Check Start Menu & Power Menu Clicks */
         if (g_start_menu_open) {
             int sm_w = 480;
             int sm_h = 540;
-            int sm_x = (g_fb.width - sm_w) / 2;
-            int sm_y = g_fb.height - TASKBAR_HEIGHT - sm_h - 12;
+            int sm_x = 12;
+            int sm_y = g_fb.height - TASKBAR_HEIGHT - sm_h - 10;
 
+            /* Power button click to toggle flyout */
+            int ubar_y = sm_y + sm_h - 56;
+            if (x >= sm_x + sm_w - 48 && x <= sm_x + sm_w - 14 && y >= ubar_y + 11 && y <= ubar_y + 45) {
+                compositor_toggle_power_menu();
+                g_mouse.prev_left = left_btn;
+                compositor_render();
+                return;
+            }
+
+            /* Power flyout options */
+            if (g_power_menu_open) {
+                int pw_w = 160;
+                int pw_h = 120;
+                int pw_x = sm_x + sm_w - pw_w - 10;
+                int pw_y = ubar_y - pw_h - 6;
+
+                if (x >= pw_x && x <= pw_x + pw_w && y >= pw_y && y <= pw_y + pw_h) {
+                    /* Sleep */
+                    if (y >= pw_y + 8 && y <= pw_y + 40) {
+                        g_start_menu_open = 0;
+                        g_power_menu_open = 0;
+                        system_hibernate();
+                        return;
+                    }
+                    /* Shutdown */
+                    if (y >= pw_y + 44 && y <= pw_y + 76) {
+                        system_shutdown();
+                        return;
+                    }
+                    /* Restart */
+                    if (y >= pw_y + 80 && y <= pw_y + 112) {
+                        system_reboot();
+                        return;
+                    }
+                }
+            }
+
+            /* Check pinned apps */
             if (x >= sm_x && x <= sm_x + sm_w && y >= sm_y && y <= sm_y + sm_h) {
-                /* Check pinned items clicks */
                 for (int i = 0; i < 8; i++) {
                     int col = i % 4;
                     int row = i / 4;
@@ -1109,18 +1281,19 @@ void compositor_update_mouse(int x, int y, uint8_t left_btn, uint8_t right_btn, 
                         else if (i == 3) taskmgr_app_launch();
                         else if (i == 4) firewall_app_launch();
                         else if (i == 5) terminal_app_launch();
-                        else if (i == 6) explorer_app_launch();
-                        else if (i == 7) explorer_app_launch();
+                        else if (i == 6) terminal_app_launch();
+                        else if (i == 7) terminal_app_launch();
 
                         g_start_menu_open = 0;
+                        g_power_menu_open = 0;
                         g_mouse.prev_left = left_btn;
-                        g_mouse.prev_right = right_btn;
                         compositor_render();
                         return;
                     }
                 }
             } else {
                 g_start_menu_open = 0;
+                g_power_menu_open = 0;
             }
         }
 
@@ -1174,20 +1347,28 @@ void compositor_update_mouse(int x, int y, uint8_t left_btn, uint8_t right_btn, 
                 }
             }
         } else {
-            /* 4. Check Desktop Icon Clicks */
-            int start_x = 20;
-            int start_y = 20;
-            int icon_h = 74;
-            int icon_w = 88;
+            /* 4. Check Desktop Icon Clicks (Image 1 Layout) */
+            int start_y = 16;
+            int row_h = 70;
+            int col_w = 86;
+            int left_col1_x = 16;
+            int left_col2_x = 104;
+            int right_col2_x = g_fb.width - 96;
+            int right_col1_x = right_col2_x - 88;
 
             for (int i = 0; i < MAX_DESKTOP_ICONS; i++) {
-                int ix = start_x;
-                int iy = start_y + i * icon_h;
-                if (x >= ix - 4 && x <= ix + icon_w && y >= iy - 4 && y <= iy + icon_h) {
+                DesktopIcon *ic = &g_desktop_icons[i];
+                int ix = 0;
+                int iy = start_y + ic->row * row_h;
+                if (ic->col == 0)      ix = left_col1_x;
+                else if (ic->col == 1) ic->col == 1 ? (ix = left_col2_x) : 0;
+                else if (ic->col == 2) ix = right_col1_x;
+                else if (ic->col == 3) ix = right_col2_x;
+
+                if (x >= ix - 4 && x <= ix + col_w && y >= iy - 2 && y <= iy + row_h - 4) {
                     if (g_selected_desktop_icon == i) {
-                        /* Double click action */
-                        if (g_desktop_icons[i].on_activate) {
-                            g_desktop_icons[i].on_activate();
+                        if (ic->on_activate) {
+                            ic->on_activate();
                         }
                     } else {
                         g_selected_desktop_icon = i;
@@ -1209,6 +1390,11 @@ void compositor_update_mouse(int x, int y, uint8_t left_btn, uint8_t right_btn, 
 
 void compositor_dispatch_key(char ascii, uint8_t scancode, uint8_t is_pressed) {
     if (!is_pressed) return;
+    if (g_is_suspended) {
+        g_is_suspended = 0;
+        compositor_render();
+        return;
+    }
     Window *win = window_get_focused();
     if (win && win->on_key) {
         win->on_key(win, ascii, scancode);
