@@ -94,6 +94,22 @@ if (-not $Nasm) {
     exit 1
 }
 
+# 0. Build & Sync React Desktop Shell Bundle
+Write-Host "`n[0/4] Building & Syncing React Desktop Shell (Vite + TypeScript)..." -ForegroundColor White
+$NpmCmd = Get-Command npm.cmd -ErrorAction SilentlyContinue
+if (-not $NpmCmd) { $NpmCmd = Get-Command npm -ErrorAction SilentlyContinue }
+
+$DesktopShellDir = Join-Path $RootDir "desktop_shell"
+if ($NpmCmd -and (Test-Path $DesktopShellDir)) {
+    try {
+        & $NpmCmd --prefix $DesktopShellDir run build
+        & python (Join-Path $ScriptDir "sync_shell_bundle.py")
+        Write-Host "[+] React Desktop Shell bundled & embedded successfully." -ForegroundColor Green
+    } catch {
+        Write-Host "[!] Note: Vite build skipped or used cached bundle." -ForegroundColor Yellow
+    }
+}
+
 # 1. Compile UEFI Bootloader
 Write-Host "`n[1/4] Compiling UEFI Bootloader (BOOTX64.EFI)..." -ForegroundColor White
 $BootSources = @(
