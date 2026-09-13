@@ -9,6 +9,9 @@
 #include "security/session.h"
 #include "security/firewall.h"
 #include "drivers/ps2.h"
+#include "drivers/sound.h"
+#include "sched/sched.h"
+#include "gui/anim.h"
 #include "gui/compositor.h"
 #include "apps/explorer_app.h"
 #include "apps/taskmgr_app.h"
@@ -16,6 +19,7 @@
 #include "apps/terminal_app.h"
 #include "apps/vlc_app.h"
 #include "apps/installer_app.h"
+#include "apps/diskclone_app.h"
 
 static XenithraBootInfo g_kernel_boot_info;
 
@@ -28,31 +32,35 @@ void kmain(XenithraBootInfo *boot_info) {
         g_kernel_boot_info = *boot_info;
     }
 
-    /* 2. Initialize Hardware PS/2 Mouse & Keyboard Drivers */
+    /* 2. Initialize Hardware Sound Driver & Synthesize Ambient Startup Chime */
+    sound_init();
+    play_system_startup_chime();
+
+    /* 3. Initialize Preemptive Multilevel Feedback Queue (MLFQ) Scheduler */
+    sched_init();
+
+    /* 4. Initialize Hardware PS/2 Mouse & Keyboard Drivers */
     uint32_t screen_w = g_kernel_boot_info.framebuffer.width ? g_kernel_boot_info.framebuffer.width : 1280;
     uint32_t screen_h = g_kernel_boot_info.framebuffer.height ? g_kernel_boot_info.framebuffer.height : 720;
     ps2_init(screen_w, screen_h);
 
-    /* 3. Initialize Kernel Security & Anti-Hijack Guard */
+    /* 5. Initialize Kernel Security & Anti-Hijack Guard */
     security_init();
     security_enable_smep_smap();
 
-    /* 4. Initialize Kernel Private Firewall */
+    /* 6. Initialize Kernel Private Firewall */
     firewall_init();
 
-    /* 5. Initialize Windows 11 Fluent Window Compositor */
+    /* 7. Initialize Windows 11 Fluent Window Compositor */
     compositor_init(g_kernel_boot_info.framebuffer);
 
-    /* 6. Launch Built-in Windows 11 Applications Suite */
+    /* 8. Launch Windows 11 File Explorer cleanly at startup */
     explorer_app_launch();
-    vlc_app_launch();
-    installer_app_launch();
-    taskmgr_app_launch();
 
-    /* 7. Render Initial Windows 11 Desktop State */
+    /* 9. Render Initial Windows 11 Desktop State */
     compositor_render();
 
-    /* 8. High-Performance Hardware Event Pump & Scheduling Loop */
+    /* 10. High-Performance Hardware Event Pump & Scheduling Loop */
     PS2MouseState mouse_state;
     PS2KeyEvent key_event;
     uint64_t loop_counter = 0;
@@ -60,7 +68,7 @@ void kmain(XenithraBootInfo *boot_info) {
     while (1) {
         loop_counter++;
 
-        /* 8.1 Poll PS/2 Mouse Hardware */
+        /* 10.1 Poll PS/2 Mouse Hardware */
         if (ps2_poll_mouse(&mouse_state)) {
             compositor_update_mouse(
                 mouse_state.x,
@@ -71,15 +79,16 @@ void kmain(XenithraBootInfo *boot_info) {
             );
         }
 
-        /* 8.2 Poll PS/2 Keyboard Hardware */
+        /* 10.2 Poll PS/2 Keyboard Hardware */
         if (ps2_poll_keyboard(&key_event)) {
             if (key_event.is_pressed && (key_event.ascii || key_event.scancode)) {
                 compositor_dispatch_key(key_event.ascii, key_event.scancode, key_event.is_pressed);
             }
         }
 
-        /* 8.3 Periodic Background Audits and Animation Ticks (60 FPS feel) */
+        /* 10.3 Preemptive Sched & Compositor 60 FPS Animation Ticks */
         if ((loop_counter & 0x3FFF) == 0) {
+            sched_tick();
             session_guard_audit();
             compositor_tick();
             compositor_render();

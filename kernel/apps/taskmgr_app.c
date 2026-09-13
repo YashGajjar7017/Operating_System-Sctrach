@@ -1,6 +1,6 @@
 /**
  * @file taskmgr_app.c
- * @brief Windows 11 Fluent Task Manager Application Implementation
+ * @brief Windows 11 Fluent Task Manager with React/Electron/TypeScript V8 Runtime Telemetry
  */
 
 #include "taskmgr_app.h"
@@ -23,31 +23,31 @@ typedef struct {
 #define CPU_HISTORY_LEN 28
 
 static TaskProcess g_processes[MAX_PROCESSES] = {
-    {"System Core", 0, "Running", 4, 16384, "Ring 0", "ADMIN | STORAGE", 1},
-    {"dwm.exe", 1, "Running", 6, 32768, "Ring 0", "COMPOSITOR | BLOOM", 1},
-    {"firewall_guard.exe", 2, "Running", 1, 8192, "Ring 0", "NET_FILTER | AUDIT", 1},
-    {"explorer.exe", 3, "Running", 3, 24576, "Ring 3", "SHELL | USER_GUI", 1},
-    {"vlc.exe", 4, "Running", 7, 48200, "Ring 3", "MEDIA | VIDEO_60FPS", 1},
-    {"installer.exe", 5, "Running", 2, 14200, "Ring 3", "X64_PACKAGE_MGR", 1},
-    {"taskmgr.exe", 6, "Running", 2, 12288, "Ring 3", "DIAGNOSTICS", 1},
-    {"terminal.exe", 7, "Running", 1, 6144, "Ring 3", "CONSOLE | CLI", 1},
-    {"session_guard.exe", 8, "Running", 1, 4096, "Ring 0", "ANTI_HIJACK | TOKEN", 1},
-    {"csrss.exe", 9, "Running", 3, 18432, "Ring 0", "SUBSYSTEM_HOST", 1}
+    {"React 19 Shell (V8 JIT)", 10, "Running", 31, 1515520, "Ring 3", "REACT 19 | ELECTRON | V8", 1},
+    {"TypeScript IPC Host",    11, "Running", 11, 911360,  "Ring 3", "TS-NODE | ASYNC IPC",    1},
+    {"Sector Cloner (Raw DMA)", 12, "Running", 16, 524288,  "Ring 0", "PHYSICAL_LBA | BITSTREAM",1},
+    {"dwm.exe (Fluent DWM)",    1,  "Running", 8,  655360,  "Ring 0", "COMPOSITOR | BLOOM 60FPS",1},
+    {"explorer.exe (WinUI)",    3,  "Running", 4,  389120,  "Ring 3", "SHELL | USER_GUI",       1},
+    {"vlc.exe (DirectShow)",    4,  "Running", 6,  491520,  "Ring 3", "MEDIA | VIDEO_60FPS",    1},
+    {"installer.exe (x64 Store)",5, "Running", 2,  215040,  "Ring 3", "X64_PACKAGE_MGR",        1},
+    {"System Core & Memory",    0,  "Running", 3,  262144,  "Ring 0", "ADMIN | MEMORY",         1},
+    {"firewall_guard.exe",      2,  "Running", 1,  131072,  "Ring 0", "NET_FILTER | AUDIT",     1},
+    {"terminal.exe (Console)",  7,  "Running", 1,  98304,   "Ring 3", "CONSOLE | CLI",          1}
 };
 
 static uint8_t g_current_tab = 0; /* 0: Processes, 1: Performance, 2: Security Guard */
 static int g_selected_proc = 0;
-static uint32_t g_cpu_history[CPU_HISTORY_LEN] = {12, 18, 15, 22, 19, 14, 16, 20, 25, 18, 14, 12, 15, 19, 23, 28, 20, 15, 12, 14, 16, 19, 15, 18, 22, 16, 14, 15};
+static uint32_t g_cpu_history[CPU_HISTORY_LEN] = {42, 58, 45, 62, 59, 54, 56, 60, 68, 58, 54, 52, 55, 61, 65, 72, 60, 55, 52, 54, 58, 62, 55, 60, 64, 58, 56, 59};
 static uint64_t g_uptime_ticks = 145;
 
 void taskmgr_tick(void) {
     g_uptime_ticks++;
 
-    /* Shift CPU history and add dynamic jitter */
+    /* Shift CPU history and add dynamic jitter around 55-75% */
     for (int i = 0; i < CPU_HISTORY_LEN - 1; i++) {
         g_cpu_history[i] = g_cpu_history[i + 1];
     }
-    uint32_t new_val = 12 + (g_uptime_ticks % 17) + ((g_uptime_ticks / 3) % 11);
+    uint32_t new_val = 52 + (g_uptime_ticks % 19) + ((g_uptime_ticks / 3) % 11);
     if (new_val > 95) new_val = 95;
     g_cpu_history[CPU_HISTORY_LEN - 1] = new_val;
 }
@@ -78,7 +78,7 @@ static void on_taskmgr_mouse(Window *win, int rel_x, int rel_y, uint8_t left_cli
 
         /* End Task Button Click (Bottom Right) */
         if (rel_y >= 380 && rel_y <= 416 && rel_x >= 560 && rel_x <= 690) {
-            if (g_selected_proc > 2) { /* Don't kill kernel PID 0/1/2 */
+            if (g_selected_proc != 7 && g_selected_proc != 8) { /* Don't kill core kernel PID 0/2 */
                 g_processes[g_selected_proc].is_active = 0;
                 g_processes[g_selected_proc].status = "Terminated";
                 g_processes[g_selected_proc].cpu_usage = 0;
@@ -95,7 +95,7 @@ static void render_processes_tab(int cx, int cy, int cw, int ch) {
     gui_fill_rect(cx + 12, table_y, table_w, 24, 0x00141C2E);
     gui_draw_rect(cx + 12, table_y, table_w, 24, GUI_BORDER_COLOR);
     gui_draw_string(cx + 20, table_y + 4, "Name", GUI_TEXT_SECONDARY, 1);
-    gui_draw_string(cx + 200, table_y + 4, "PID", GUI_TEXT_SECONDARY, 1);
+    gui_draw_string(cx + 210, table_y + 4, "PID", GUI_TEXT_SECONDARY, 1);
     gui_draw_string(cx + 260, table_y + 4, "Status", GUI_TEXT_SECONDARY, 1);
     gui_draw_string(cx + 360, table_y + 4, "CPU", GUI_TEXT_SECONDARY, 1);
     gui_draw_string(cx + 420, table_y + 4, "Memory", GUI_TEXT_SECONDARY, 1);
@@ -115,8 +115,9 @@ static void render_processes_tab(int cx, int cy, int cw, int ch) {
         }
 
         /* App Icon */
-        gui_fill_rounded_rect(cx + 18, cur_y + 5, 18, 18, 3, (i < 3) ? GUI_ACCENT_BLUE : GUI_ACCENT_CYAN);
-        gui_draw_string(cx + 24, cur_y + 6, (i < 3) ? "K" : "U", 0x00FFFFFF, 1);
+        uint32_t icon_bg = (i == 0 || i == 1) ? 0x0061DAFB : ((i < 4) ? GUI_ACCENT_BLUE : GUI_ACCENT_CYAN);
+        gui_fill_rounded_rect(cx + 18, cur_y + 5, 18, 18, 3, icon_bg);
+        gui_draw_string(cx + 24, cur_y + 6, (i == 0) ? "R" : ((i == 1) ? "T" : ((i < 4) ? "K" : "U")), 0x00000000, 1);
 
         /* Name */
         gui_draw_string(cx + 44, cur_y + 6, p->name, p->is_active ? GUI_TEXT_PRIMARY : GUI_TEXT_MUTED, 1);
@@ -124,7 +125,7 @@ static void render_processes_tab(int cx, int cy, int cw, int ch) {
         /* PID */
         char num_buf[16];
         uint_to_str(p->pid, num_buf);
-        gui_draw_string(cx + 200, cur_y + 6, num_buf, GUI_TEXT_SECONDARY, 1);
+        gui_draw_string(cx + 210, cur_y + 6, num_buf, GUI_TEXT_SECONDARY, 1);
 
         /* Status */
         gui_draw_string(cx + 260, cur_y + 6, p->status, p->is_active ? GUI_ACCENT_GREEN : GUI_ACCENT_RED, 1);
@@ -132,7 +133,7 @@ static void render_processes_tab(int cx, int cy, int cw, int ch) {
         /* CPU */
         uint_to_str(p->cpu_usage, num_buf);
         strcat(num_buf, " %");
-        gui_draw_string(cx + 360, cur_y + 6, num_buf, GUI_TEXT_PRIMARY, 1);
+        gui_draw_string(cx + 360, cur_y + 6, num_buf, (p->cpu_usage > 15) ? GUI_ACCENT_CYAN : GUI_TEXT_PRIMARY, 1);
 
         /* Memory */
         uint_to_str(p->mem_kb / 1024, num_buf);
@@ -140,7 +141,7 @@ static void render_processes_tab(int cx, int cy, int cw, int ch) {
         gui_draw_string(cx + 420, cur_y + 6, num_buf, GUI_TEXT_SECONDARY, 1);
 
         /* Privilege */
-        gui_draw_string(cx + 510, cur_y + 6, p->ring, (i < 3 || i == 7) ? 0x00D2A8FF : GUI_ACCENT_CYAN, 1);
+        gui_draw_string(cx + 510, cur_y + 6, p->ring, (i == 2 || i == 3 || i == 7 || i == 8) ? 0x00D2A8FF : GUI_ACCENT_CYAN, 1);
 
         /* Capabilities */
         gui_draw_string(cx + 600, cur_y + 6, p->caps, GUI_TEXT_MUTED, 1);
@@ -148,12 +149,12 @@ static void render_processes_tab(int cx, int cy, int cw, int ch) {
 
     /* Action Footer */
     int footer_y = cy + ch - 42;
-    gui_fill_rounded_rect(cx + cw - 150, footer_y, 130, 32, 6, (g_selected_proc > 2) ? GUI_ACCENT_RED : 0x00334155);
+    gui_fill_rounded_rect(cx + cw - 150, footer_y, 130, 32, 6, (g_selected_proc != 7 && g_selected_proc != 8) ? GUI_ACCENT_RED : 0x00334155);
     gui_draw_string(cx + cw - 128, footer_y + 8, "End Task", 0x00FFFFFF, 1);
 
-    gui_fill_rounded_rect(cx + 12, footer_y, 140, 32, 6, GUI_BG_CARD);
-    gui_draw_rect(cx + 12, footer_y, 140, 32, GUI_BORDER_COLOR);
-    gui_draw_string(cx + 28, footer_y + 8, "+ Run New Task", GUI_ACCENT_CYAN, 1);
+    gui_fill_rounded_rect(cx + 12, footer_y, 180, 32, 6, GUI_BG_CARD);
+    gui_draw_rect(cx + 12, footer_y, 180, 32, GUI_BORDER_COLOR);
+    gui_draw_string(cx + 20, footer_y + 8, "+ Run React/Electron Task", GUI_ACCENT_CYAN, 1);
 }
 
 static void render_performance_tab(int cx, int cy, int cw, int ch) {
@@ -161,34 +162,34 @@ static void render_performance_tab(int cx, int cy, int cw, int ch) {
     /* Left Sidebar Cards */
     int side_x = cx + 12;
     int side_y = cy + 74;
-    int side_w = 200;
+    int side_w = 210;
 
     /* Card 1: CPU */
     gui_fill_rounded_rect(side_x, side_y, side_w, 64, 6, GUI_BG_CARD_HOVER);
     gui_draw_rect(side_x, side_y, side_w, 64, GUI_ACCENT_BLUE);
     gui_draw_string(side_x + 14, side_y + 10, "CPU", GUI_ACCENT_CYAN, 2);
-    char cpu_str[16];
+    char cpu_str[32];
     uint_to_str(g_cpu_history[CPU_HISTORY_LEN - 1], cpu_str);
-    strcat(cpu_str, " % 3.40 GHz");
+    strcat(cpu_str, " % 3.60 GHz");
     gui_draw_string(side_x + 14, side_y + 38, cpu_str, GUI_TEXT_SECONDARY, 1);
 
     /* Card 2: Memory */
     gui_fill_rounded_rect(side_x, side_y + 72, side_w, 64, 6, GUI_BG_CARD);
     gui_draw_rect(side_x, side_y + 72, side_w, 64, GUI_BORDER_COLOR);
     gui_draw_string(side_x + 14, side_y + 82, "Memory", GUI_TEXT_PRIMARY, 2);
-    gui_draw_string(side_x + 14, side_y + 110, "142 MB / 2048 MB (7%)", GUI_TEXT_MUTED, 1);
+    gui_draw_string(side_x + 14, side_y + 110, "5.07 GB / 8.00 GB (63%)", GUI_ACCENT_CYAN, 1);
 
     /* Card 3: Disk */
     gui_fill_rounded_rect(side_x, side_y + 144, side_w, 64, 6, GUI_BG_CARD);
     gui_draw_rect(side_x, side_y + 144, side_w, 64, GUI_BORDER_COLOR);
-    gui_draw_string(side_x + 14, side_y + 154, "Disk 0 (C:)", GUI_TEXT_PRIMARY, 2);
-    gui_draw_string(side_x + 14, side_y + 182, "0% Active | 64MB FAT32", GUI_TEXT_MUTED, 1);
+    gui_draw_string(side_x + 14, side_y + 154, "Disk 0 (PhysicalDrive0)", GUI_TEXT_PRIMARY, 2);
+    gui_draw_string(side_x + 14, side_y + 182, "84% Active | 148.5 MB/s", GUI_ACCENT_GREEN, 1);
 
     /* Card 4: Network */
     gui_fill_rounded_rect(side_x, side_y + 216, side_w, 64, 6, GUI_BG_CARD);
     gui_draw_rect(side_x, side_y + 216, side_w, 64, GUI_BORDER_COLOR);
-    gui_draw_string(side_x + 14, side_y + 226, "Ethernet (NAT)", GUI_TEXT_PRIMARY, 2);
-    gui_draw_string(side_x + 14, side_y + 254, "Send: 0 Kbps | Rcv: 0", GUI_TEXT_MUTED, 1);
+    gui_draw_string(side_x + 14, side_y + 226, "Ethernet (V8 WebSocket)", GUI_TEXT_PRIMARY, 2);
+    gui_draw_string(side_x + 14, side_y + 254, "Send: 1.2 Mbps | Rcv: 4.8", GUI_TEXT_MUTED, 1);
 
     /* Right Main Graph Area */
     int graph_x = cx + side_w + 24;
@@ -199,7 +200,7 @@ static void render_performance_tab(int cx, int cy, int cw, int ch) {
     gui_fill_rounded_rect(graph_x, graph_y, graph_w, graph_h, 8, 0x000A101C);
     gui_draw_rect(graph_x, graph_y, graph_w, graph_h, GUI_ACCENT_BLUE);
 
-    gui_draw_string(graph_x + 16, graph_y + 12, "% Utilization (60 Seconds Waveform)", GUI_TEXT_SECONDARY, 1);
+    gui_draw_string(graph_x + 16, graph_y + 12, "CPU & V8 Engine % Utilization (60s Waveform)", GUI_TEXT_SECONDARY, 1);
     gui_draw_string(graph_x + graph_w - 60, graph_y + 12, "100%", GUI_TEXT_MUTED, 1);
     gui_draw_string(graph_x + graph_w - 40, graph_y + graph_h - 20, "0%", GUI_TEXT_MUTED, 1);
 
@@ -217,7 +218,8 @@ static void render_performance_tab(int cx, int cy, int cw, int ch) {
         int bx = graph_x + 15 + i * bar_width;
         int by = graph_y + graph_h - 10 - bar_h;
 
-        gui_fill_rect(bx, by, bar_width - 2, bar_h, GUI_ACCENT_CYAN);
+        uint32_t bar_color = (val > 65) ? GUI_ACCENT_CYAN : GUI_ACCENT_BLUE;
+        gui_fill_rect(bx, by, bar_width - 2, bar_h, bar_color);
     }
 
     /* Detailed System Stats underneath graph */
@@ -225,13 +227,13 @@ static void render_performance_tab(int cx, int cy, int cw, int ch) {
     gui_draw_string(graph_x + 10, stat_y, "Utilization: ", GUI_TEXT_MUTED, 1);
     gui_draw_string(graph_x + 110, stat_y, cpu_str, GUI_TEXT_PRIMARY, 1);
 
-    gui_draw_string(graph_x + 10, stat_y + 24, "Processes: ", GUI_TEXT_MUTED, 1);
-    gui_draw_string(graph_x + 110, stat_y + 24, "8 Active", GUI_TEXT_PRIMARY, 1);
+    gui_draw_string(graph_x + 10, stat_y + 24, "V8 / React Threads: ", GUI_TEXT_MUTED, 1);
+    gui_draw_string(graph_x + 160, stat_y + 24, "16 Active (JIT)", GUI_TEXT_PRIMARY, 1);
 
-    gui_draw_string(graph_x + 240, stat_y, "Base Speed: ", GUI_TEXT_MUTED, 1);
-    gui_draw_string(graph_x + 340, stat_y, "3.40 GHz", GUI_TEXT_PRIMARY, 1);
+    gui_draw_string(graph_x + 280, stat_y, "Memory In Use: ", GUI_TEXT_MUTED, 1);
+    gui_draw_string(graph_x + 400, stat_y, "5,190 MB (63%)", GUI_ACCENT_CYAN, 1);
 
-    gui_draw_string(graph_x + 240, stat_y + 24, "Up Time: ", GUI_TEXT_MUTED, 1);
+    gui_draw_string(graph_x + 280, stat_y + 24, "Up Time: ", GUI_TEXT_MUTED, 1);
     char up_str[32];
     uint_to_str(g_uptime_ticks / 60, up_str);
     strcat(up_str, "m ");
@@ -239,7 +241,7 @@ static void render_performance_tab(int cx, int cy, int cw, int ch) {
     uint_to_str(g_uptime_ticks % 60, sec_buf);
     strcat(up_str, sec_buf);
     strcat(up_str, "s");
-    gui_draw_string(graph_x + 340, stat_y + 24, up_str, GUI_ACCENT_GREEN, 1);
+    gui_draw_string(graph_x + 400, stat_y + 24, up_str, GUI_ACCENT_GREEN, 1);
 }
 
 static void render_security_tab(int cx, int cy, int cw, int ch) {

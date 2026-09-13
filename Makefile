@@ -39,11 +39,15 @@ BOOT_OBJS = $(BUILD_DIR)/boot_main.o \
             $(BUILD_DIR)/boot_font.o
 
 KERN_OBJS = $(BUILD_DIR)/kern_entry.o \
+            $(BUILD_DIR)/sched_switch.o \
             $(BUILD_DIR)/kern_main.o \
             $(BUILD_DIR)/kern_ps2.o \
+            $(BUILD_DIR)/kern_sound.o \
+            $(BUILD_DIR)/kern_sched.o \
             $(BUILD_DIR)/kern_session.o \
             $(BUILD_DIR)/kern_firewall.o \
             $(BUILD_DIR)/kern_compositor.o \
+            $(BUILD_DIR)/kern_anim.o \
             $(BUILD_DIR)/kern_dom.o \
             $(BUILD_DIR)/kern_app_explorer.o \
             $(BUILD_DIR)/kern_app_taskmgr.o \
@@ -51,6 +55,7 @@ KERN_OBJS = $(BUILD_DIR)/kern_entry.o \
             $(BUILD_DIR)/kern_app_terminal.o \
             $(BUILD_DIR)/kern_app_vlc.o \
             $(BUILD_DIR)/kern_app_installer.o \
+            $(BUILD_DIR)/kern_app_diskclone.o \
             $(BUILD_DIR)/kern_string.o \
             $(BUILD_DIR)/kern_font.o
 
@@ -83,10 +88,19 @@ $(BOOT_EFI): $(BOOT_OBJS)
 $(BUILD_DIR)/kern_entry.o: $(KERN_DIR)/arch/x86_64/entry.asm | $(BUILD_DIR)
 	$(AS) $(ASFLAGS) $< -o $@
 
+$(BUILD_DIR)/sched_switch.o: $(KERN_DIR)/arch/x86_64/switch.asm | $(BUILD_DIR)
+	$(AS) $(ASFLAGS) $< -o $@
+
 $(BUILD_DIR)/kern_main.o: $(KERN_DIR)/main.c | $(BUILD_DIR)
 	$(CC_KERN) $(TARGET_KERN) -I$(SHARED_DIR) -I$(KERN_DIR) -c $< -o $@
 
 $(BUILD_DIR)/kern_ps2.o: $(KERN_DIR)/drivers/ps2.c | $(BUILD_DIR)
+	$(CC_KERN) $(TARGET_KERN) -I$(SHARED_DIR) -I$(KERN_DIR) -c $< -o $@
+
+$(BUILD_DIR)/kern_sound.o: $(KERN_DIR)/drivers/sound.c | $(BUILD_DIR)
+	$(CC_KERN) $(TARGET_KERN) -I$(SHARED_DIR) -I$(KERN_DIR) -c $< -o $@
+
+$(BUILD_DIR)/kern_sched.o: $(KERN_DIR)/sched/sched.c | $(BUILD_DIR)
 	$(CC_KERN) $(TARGET_KERN) -I$(SHARED_DIR) -I$(KERN_DIR) -c $< -o $@
 
 $(BUILD_DIR)/kern_session.o: $(KERN_DIR)/security/session.c | $(BUILD_DIR)
@@ -96,6 +110,9 @@ $(BUILD_DIR)/kern_firewall.o: $(KERN_DIR)/security/firewall.c | $(BUILD_DIR)
 	$(CC_KERN) $(TARGET_KERN) -I$(SHARED_DIR) -I$(KERN_DIR) -c $< -o $@
 
 $(BUILD_DIR)/kern_compositor.o: $(KERN_DIR)/gui/compositor.c | $(BUILD_DIR)
+	$(CC_KERN) $(TARGET_KERN) -I$(SHARED_DIR) -I$(KERN_DIR) -c $< -o $@
+
+$(BUILD_DIR)/kern_anim.o: $(KERN_DIR)/gui/anim.c | $(BUILD_DIR)
 	$(CC_KERN) $(TARGET_KERN) -I$(SHARED_DIR) -I$(KERN_DIR) -c $< -o $@
 
 $(BUILD_DIR)/kern_dom.o: $(KERN_DIR)/gui/dom_engine.c | $(BUILD_DIR)
@@ -117,6 +134,9 @@ $(BUILD_DIR)/kern_app_vlc.o: $(KERN_DIR)/apps/vlc_app.c | $(BUILD_DIR)
 	$(CC_KERN) $(TARGET_KERN) -I$(SHARED_DIR) -I$(KERN_DIR) -c $< -o $@
 
 $(BUILD_DIR)/kern_app_installer.o: $(KERN_DIR)/apps/installer_app.c | $(BUILD_DIR)
+	$(CC_KERN) $(TARGET_KERN) -I$(SHARED_DIR) -I$(KERN_DIR) -c $< -o $@
+
+$(BUILD_DIR)/kern_app_diskclone.o: $(KERN_DIR)/apps/diskclone_app.c | $(BUILD_DIR)
 	$(CC_KERN) $(TARGET_KERN) -I$(SHARED_DIR) -I$(KERN_DIR) -c $< -o $@
 
 $(BUILD_DIR)/kern_string.o: $(KERN_DIR)/kstring.c | $(BUILD_DIR)

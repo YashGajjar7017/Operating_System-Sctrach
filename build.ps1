@@ -119,17 +119,22 @@ Write-Host "[+] BOOTX64.EFI built successfully." -ForegroundColor Green
 
 # 2. Assemble and Compile Kernel
 Write-Host "`n[2/4] Assembling & Compiling Kernel with Security Subsystems (kernel.elf)..." -ForegroundColor White
-$KernelEntryAsm = Join-Path $KernDir "arch\x86_64\entry.asm"
-$KernelEntryObj = Join-Path $BuildDir "kern_entry.o"
-$KernelElf      = Join-Path $BuildDir "kernel.elf"
-$LinkerScript   = Join-Path $KernDir "linker.ld"
+$KernelEntryAsm  = Join-Path $KernDir "arch\x86_64\entry.asm"
+$KernelSwitchAsm = Join-Path $KernDir "arch\x86_64\switch.asm"
+$KernelEntryObj  = Join-Path $BuildDir "kern_entry.o"
+$KernelSwitchObj = Join-Path $BuildDir "sched_switch.o"
+$KernelElf       = Join-Path $BuildDir "kernel.elf"
+$LinkerScript    = Join-Path $KernDir "linker.ld"
 
 $KernelSources = @(
     @{ Src = (Join-Path $KernDir "main.c"); Obj = (Join-Path $BuildDir "kern_main.o") },
     @{ Src = (Join-Path $KernDir "drivers\ps2.c"); Obj = (Join-Path $BuildDir "kern_ps2.o") },
+    @{ Src = (Join-Path $KernDir "drivers\sound.c"); Obj = (Join-Path $BuildDir "kern_sound.o") },
+    @{ Src = (Join-Path $KernDir "sched\sched.c"); Obj = (Join-Path $BuildDir "kern_sched.o") },
     @{ Src = (Join-Path $KernDir "security\session.c"); Obj = (Join-Path $BuildDir "kern_session.o") },
     @{ Src = (Join-Path $KernDir "security\firewall.c"); Obj = (Join-Path $BuildDir "kern_firewall.o") },
     @{ Src = (Join-Path $KernDir "gui\compositor.c"); Obj = (Join-Path $BuildDir "kern_compositor.o") },
+    @{ Src = (Join-Path $KernDir "gui\anim.c"); Obj = (Join-Path $BuildDir "kern_anim.o") },
     @{ Src = (Join-Path $KernDir "gui\dom_engine.c"); Obj = (Join-Path $BuildDir "kern_dom.o") },
     @{ Src = (Join-Path $KernDir "apps\explorer_app.c"); Obj = (Join-Path $BuildDir "kern_app_explorer.o") },
     @{ Src = (Join-Path $KernDir "apps\taskmgr_app.c"); Obj = (Join-Path $BuildDir "kern_app_taskmgr.o") },
@@ -137,13 +142,15 @@ $KernelSources = @(
     @{ Src = (Join-Path $KernDir "apps\terminal_app.c"); Obj = (Join-Path $BuildDir "kern_app_terminal.o") },
     @{ Src = (Join-Path $KernDir "apps\vlc_app.c"); Obj = (Join-Path $BuildDir "kern_app_vlc.o") },
     @{ Src = (Join-Path $KernDir "apps\installer_app.c"); Obj = (Join-Path $BuildDir "kern_app_installer.o") },
+    @{ Src = (Join-Path $KernDir "apps\diskclone_app.c"); Obj = (Join-Path $BuildDir "kern_app_diskclone.o") },
     @{ Src = (Join-Path $KernDir "kstring.c"); Obj = (Join-Path $BuildDir "kern_string.o") },
     @{ Src = (Join-Path $SharedDir "font.c"); Obj = (Join-Path $BuildDir "kern_font.o") }
 )
 
 & nasm -f elf64 $KernelEntryAsm -o $KernelEntryObj
+& nasm -f elf64 $KernelSwitchAsm -o $KernelSwitchObj
 
-$ObjList = @($KernelEntryObj)
+$ObjList = @($KernelEntryObj, $KernelSwitchObj)
 foreach ($item in $KernelSources) {
     & clang -target x86_64-unknown-none-elf -ffreestanding -mno-red-zone -mcmodel=kernel -I$SharedDir -I$KernDir -O2 -c $item.Src -o $item.Obj
     $ObjList += $item.Obj

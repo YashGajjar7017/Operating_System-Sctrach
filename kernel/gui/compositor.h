@@ -13,7 +13,7 @@
 #define MAX_WINDOWS         16
 #define TITLEBAR_HEIGHT     36
 #define TASKBAR_HEIGHT      48
-#define MAX_DESKTOP_ICONS   24
+#define MAX_DESKTOP_ICONS   32
 
 /* Windows 11 Fluent Dark Mica & Acrylic Palette */
 #define GUI_BG_WALLPAPER_TOP    0x00060A14 /* Deep Midnight Navy */
@@ -155,6 +155,7 @@ void gui_draw_fluent_icon_antigravity(int x, int y);
 void gui_draw_fluent_icon_modbus(int x, int y);
 void gui_draw_fluent_icon_text_doc(int x, int y);
 void gui_draw_fluent_icon_batch_file(int x, int y);
+void gui_draw_fluent_icon_diskclone(int x, int y);
 void gui_draw_fluent_icon_by_tag(int x, int y, const char *tag);
 
 #endif /* _KERNEL_GUI_COMPOSITOR_H_ */
