@@ -49,6 +49,8 @@ KERN_OBJS = $(BUILD_DIR)/kern_entry.o \
             $(BUILD_DIR)/kern_app_taskmgr.o \
             $(BUILD_DIR)/kern_app_firewall.o \
             $(BUILD_DIR)/kern_app_terminal.o \
+            $(BUILD_DIR)/kern_app_vlc.o \
+            $(BUILD_DIR)/kern_app_installer.o \
             $(BUILD_DIR)/kern_string.o \
             $(BUILD_DIR)/kern_font.o
 
@@ -109,6 +111,12 @@ $(BUILD_DIR)/kern_app_firewall.o: $(KERN_DIR)/apps/firewall_app.c | $(BUILD_DIR)
 	$(CC_KERN) $(TARGET_KERN) -I$(SHARED_DIR) -I$(KERN_DIR) -c $< -o $@
 
 $(BUILD_DIR)/kern_app_terminal.o: $(KERN_DIR)/apps/terminal_app.c | $(BUILD_DIR)
+	$(CC_KERN) $(TARGET_KERN) -I$(SHARED_DIR) -I$(KERN_DIR) -c $< -o $@
+
+$(BUILD_DIR)/kern_app_vlc.o: $(KERN_DIR)/apps/vlc_app.c | $(BUILD_DIR)
+	$(CC_KERN) $(TARGET_KERN) -I$(SHARED_DIR) -I$(KERN_DIR) -c $< -o $@
+
+$(BUILD_DIR)/kern_app_installer.o: $(KERN_DIR)/apps/installer_app.c | $(BUILD_DIR)
 	$(CC_KERN) $(TARGET_KERN) -I$(SHARED_DIR) -I$(KERN_DIR) -c $< -o $@
 
 $(BUILD_DIR)/kern_string.o: $(KERN_DIR)/kstring.c | $(BUILD_DIR)

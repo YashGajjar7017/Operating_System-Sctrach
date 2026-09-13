@@ -19,18 +19,20 @@ typedef struct {
     uint8_t is_active;
 } TaskProcess;
 
-#define MAX_PROCESSES 8
+#define MAX_PROCESSES 10
 #define CPU_HISTORY_LEN 28
 
 static TaskProcess g_processes[MAX_PROCESSES] = {
     {"System Core", 0, "Running", 4, 16384, "Ring 0", "ADMIN | STORAGE", 1},
-    {"csrss.exe", 1, "Running", 6, 28672, "Ring 0", "COMPOSITOR | DESKTOP", 1},
+    {"dwm.exe", 1, "Running", 6, 32768, "Ring 0", "COMPOSITOR | BLOOM", 1},
     {"firewall_guard.exe", 2, "Running", 1, 8192, "Ring 0", "NET_FILTER | AUDIT", 1},
     {"explorer.exe", 3, "Running", 3, 24576, "Ring 3", "SHELL | USER_GUI", 1},
-    {"taskmgr.exe", 4, "Running", 2, 12288, "Ring 3", "DIAGNOSTICS", 1},
-    {"terminal.exe", 5, "Running", 1, 6144, "Ring 3", "CONSOLE | CLI", 1},
-    {"session_guard.exe", 6, "Running", 1, 4096, "Ring 0", "ANTI_HIJACK | TOKEN", 1},
-    {"dwm.exe", 7, "Running", 5, 32768, "Ring 0", "DOUBLE_BUFFER | GOP", 1}
+    {"vlc.exe", 4, "Running", 7, 48200, "Ring 3", "MEDIA | VIDEO_60FPS", 1},
+    {"installer.exe", 5, "Running", 2, 14200, "Ring 3", "X64_PACKAGE_MGR", 1},
+    {"taskmgr.exe", 6, "Running", 2, 12288, "Ring 3", "DIAGNOSTICS", 1},
+    {"terminal.exe", 7, "Running", 1, 6144, "Ring 3", "CONSOLE | CLI", 1},
+    {"session_guard.exe", 8, "Running", 1, 4096, "Ring 0", "ANTI_HIJACK | TOKEN", 1},
+    {"csrss.exe", 9, "Running", 3, 18432, "Ring 0", "SUBSYSTEM_HOST", 1}
 };
 
 static uint8_t g_current_tab = 0; /* 0: Processes, 1: Performance, 2: Security Guard */

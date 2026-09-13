@@ -135,6 +135,8 @@ $KernelSources = @(
     @{ Src = (Join-Path $KernDir "apps\taskmgr_app.c"); Obj = (Join-Path $BuildDir "kern_app_taskmgr.o") },
     @{ Src = (Join-Path $KernDir "apps\firewall_app.c"); Obj = (Join-Path $BuildDir "kern_app_firewall.o") },
     @{ Src = (Join-Path $KernDir "apps\terminal_app.c"); Obj = (Join-Path $BuildDir "kern_app_terminal.o") },
+    @{ Src = (Join-Path $KernDir "apps\vlc_app.c"); Obj = (Join-Path $BuildDir "kern_app_vlc.o") },
+    @{ Src = (Join-Path $KernDir "apps\installer_app.c"); Obj = (Join-Path $BuildDir "kern_app_installer.o") },
     @{ Src = (Join-Path $KernDir "kstring.c"); Obj = (Join-Path $BuildDir "kern_string.o") },
     @{ Src = (Join-Path $SharedDir "font.c"); Obj = (Join-Path $BuildDir "kern_font.o") }
 )

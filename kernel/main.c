@@ -14,6 +14,8 @@
 #include "apps/taskmgr_app.h"
 #include "apps/firewall_app.h"
 #include "apps/terminal_app.h"
+#include "apps/vlc_app.h"
+#include "apps/installer_app.h"
 
 static XenithraBootInfo g_kernel_boot_info;
 
@@ -41,16 +43,16 @@ void kmain(XenithraBootInfo *boot_info) {
     /* 5. Initialize Windows 11 Fluent Window Compositor */
     compositor_init(g_kernel_boot_info.framebuffer);
 
-    /* 6. Launch Built-in Applications */
+    /* 6. Launch Built-in Windows 11 Applications Suite */
     explorer_app_launch();
+    vlc_app_launch();
+    installer_app_launch();
     taskmgr_app_launch();
-    firewall_app_launch();
-    terminal_app_launch();
 
-    /* 7. Render Initial Desktop State */
+    /* 7. Render Initial Windows 11 Desktop State */
     compositor_render();
 
-    /* 8. High-Performance Hardware Event Pump & Main Scheduling Loop */
+    /* 8. High-Performance Hardware Event Pump & Scheduling Loop */
     PS2MouseState mouse_state;
     PS2KeyEvent key_event;
     uint64_t loop_counter = 0;
@@ -76,8 +78,8 @@ void kmain(XenithraBootInfo *boot_info) {
             }
         }
 
-        /* 8.3 Periodic Background Audits and Animation Ticks */
-        if ((loop_counter & 0x7FFF) == 0) {
+        /* 8.3 Periodic Background Audits and Animation Ticks (60 FPS feel) */
+        if ((loop_counter & 0x3FFF) == 0) {
             session_guard_audit();
             compositor_tick();
             compositor_render();
