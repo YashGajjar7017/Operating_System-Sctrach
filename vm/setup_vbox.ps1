@@ -85,22 +85,47 @@ Write-Host "[*] Configuring 64-bit UEFI, 2GB RAM, 2 CPUs, and 128MB VRAM..." -Fo
     --mouse usbtablet `
     --keyboard ps2
 
-# 5. Storage Controller & Attach ISO
-Write-Host "[*] Attaching ISO ($IsoPath) as Bootable DVD..." -ForegroundColor White
+$DiskImg = Join-Path $RootDir "build\disk.img"
+$VdiPath = Join-Path $RootDir "build\disk.vdi"
 
-# Ensure SATA AHCI controller exists
-$CtlCheck = & $VBoxManage showvminfo $VmName --machinereadable
-if (($CtlCheck -match 'storagecontrollername.*"AHCI"') -eq $null -or ($CtlCheck -match 'storagecontrollername.*"AHCI"').Count -eq 0) {
-    & $VBoxManage storagectl $VmName --name "AHCI" --add sata --controller IntelAHCI --portcount 2 --bootable on
+# Convert disk.img to disk.vdi if disk.img is present and disk.vdi is missing or older
+if (Test-Path $DiskImg) {
+    if ((-not (Test-Path $VdiPath)) -or ((Get-Item $DiskImg).LastWriteTime -gt (Get-Item $VdiPath).LastWriteTime)) {
+        Write-Host "[*] Converting disk.img to VirtualBox native VDI format ($VdiPath)..." -ForegroundColor Cyan
+        if (Test-Path $VdiPath) {
+            & $VBoxManage closemedium disk $VdiPath --delete -ErrorAction SilentlyContinue 2>$null
+            Remove-Item $VdiPath -Force -ErrorAction SilentlyContinue
+        }
+        & $VBoxManage convertfromraw $DiskImg $VdiPath --format VDI
+    }
 }
 
-# Attach ISO to Port 0
+# 5. Storage Controller & Attach Media
+Write-Host "[*] Attaching Bootable ISO ($IsoPath) & VDI Hard Disk ($VdiPath)..." -ForegroundColor White
+
+# Ensure SATA AHCI controller exists with 4 ports
+$CtlCheck = & $VBoxManage showvminfo $VmName --machinereadable
+if (($CtlCheck -match 'storagecontrollername.*"AHCI"') -eq $null -or ($CtlCheck -match 'storagecontrollername.*"AHCI"').Count -eq 0) {
+    & $VBoxManage storagectl $VmName --name "AHCI" --add sata --controller IntelAHCI --portcount 4 --bootable on
+}
+
+# Attach ISO to Port 0 (DVD Drive)
 & $VBoxManage storageattach $VmName `
     --storagectl "AHCI" `
     --port 0 `
     --device 0 `
     --type dvddrive `
     --medium $IsoPath
+
+# Attach VDI to Port 1 (Hard Disk) if present
+if (Test-Path $VdiPath) {
+    & $VBoxManage storageattach $VmName `
+        --storagectl "AHCI" `
+        --port 1 `
+        --device 0 `
+        --type hdd `
+        --medium $VdiPath
+}
 
 Write-Host "[+] VirtualBox VM '$VmName' successfully configured!" -ForegroundColor Green
 
@@ -109,4 +134,5 @@ if (-not $NoStart) {
     Write-Host "[*] Launching '$VmName' in VirtualBox..." -ForegroundColor Cyan
     & $VBoxManage startvm $VmName
 }
+
 

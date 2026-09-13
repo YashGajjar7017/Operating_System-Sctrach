@@ -52,10 +52,15 @@ def make_el_torito_catalog(efi_img_lba, efi_img_512_sectors):
     struct.pack_into('<H', val, 28, csum)
     catalog[0:32] = val
 
-    # 2. Initial / Default Entry (Legacy BIOS - Not Bootable)
+    # 2. Initial / Default Entry (Bootable No-Emulation pointing to EFI ESP)
     init_entry = bytearray(32)
-    init_entry[0] = 0x00               # Boot indicator (0x00 = not bootable)
+    init_entry[0] = 0x88               # Boot indicator (0x88 = bootable)
     init_entry[1] = 0x00               # No emulation
+    struct.pack_into('<H', init_entry, 2, 0) # Load segment
+    init_entry[4] = 0x00               # System type
+    init_entry[5] = 0x00               # Unused
+    struct.pack_into('<H', init_entry, 6, 0) # Sector count (0 = entire partition/media)
+    struct.pack_into('<I', init_entry, 8, efi_img_lba) # 2048-byte LBA of FAT ESP image
     catalog[32:64] = init_entry
 
     # 3. Section Header for UEFI (32 bytes)
@@ -73,7 +78,7 @@ def make_el_torito_catalog(efi_img_lba, efi_img_512_sectors):
     struct.pack_into('<H', sec_entry, 2, 0) # Load segment
     sec_entry[4] = 0x00                # System type
     sec_entry[5] = 0x00                # Unused
-    struct.pack_into('<H', sec_entry, 6, 1) # Sector count in 512-byte blocks
+    struct.pack_into('<H', sec_entry, 6, 0) # Sector count (0 = entire partition)
     struct.pack_into('<I', sec_entry, 8, efi_img_lba) # 2048-byte LBA of FAT ESP image
     catalog[96:128] = sec_entry
 

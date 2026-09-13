@@ -7,7 +7,7 @@
 import os
 import urllib.request
 
-OVMF_URL = "https://github.com/rust-osdev/ovmf-prebuilt/releases/latest/download/OVMF-pure-efi.fd"
+OVMF_URL = "https://github.com/clearlinux/common/raw/master/OVMF.fd"
 OVMF_LOCAL = "build/ovmf.fd"
 
 def fetch_ovmf():
@@ -18,7 +18,9 @@ def fetch_ovmf():
 
     print(f"[*] Downloading prebuilt OVMF UEFI firmware from {OVMF_URL}...")
     try:
-        urllib.request.urlretrieve(OVMF_URL, OVMF_LOCAL)
+        req = urllib.request.Request(OVMF_URL, headers={"User-Agent": "Mozilla/5.0"})
+        with urllib.request.urlopen(req) as resp, open(OVMF_LOCAL, "wb") as f:
+            f.write(resp.read())
         print(f"[+] Successfully saved OVMF firmware to {OVMF_LOCAL}")
         return True
     except Exception as e:
@@ -28,3 +30,4 @@ def fetch_ovmf():
 
 if __name__ == "__main__":
     fetch_ovmf()
+

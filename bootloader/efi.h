@@ -47,7 +47,9 @@ typedef UINT64    EFI_VIRTUAL_ADDRESS;
 
 #define TRUE  1
 #define FALSE 0
+#ifndef NULL
 #define NULL  ((VOID*)0)
+#endif
 
 /* Status Codes */
 #define EFI_SUCCESS               0ULL
@@ -485,6 +487,13 @@ typedef EFI_STATUS (EFIAPI *EFI_STALL)(
     IN UINTN Microseconds
 );
 
+typedef EFI_STATUS (EFIAPI *EFI_SET_WATCHDOG_TIMER)(
+    IN UINTN Timeout,
+    IN UINT64 WatchdogCode,
+    IN UINTN DataSize,
+    IN CHAR16 *WatchdogData OPTIONAL
+);
+
 typedef struct {
     EFI_TABLE_HEADER            Hdr;
 
@@ -528,7 +537,8 @@ typedef struct {
     /* Misc Services */
     VOID*                       GetNextMonotonicCount;
     EFI_STALL                   Stall;
-    VOID*                       SetWatchdogTimer;
+    EFI_SET_WATCHDOG_TIMER      SetWatchdogTimer;
+
 
     /* DriverSupport Services */
     VOID*                       ConnectController;

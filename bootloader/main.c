@@ -336,7 +336,7 @@ EFI_STATUS EFIAPI EfiMain(EFI_HANDLE ImageHandle, EFI_SYSTEM_TABLE *SystemTable)
         }
     }
 
-    g_boot_info.memory_map.map = (AuraMemoryDescriptor*)mmap;
+    g_boot_info.memory_map.map = (XenithraMemoryDescriptor*)mmap;
     g_boot_info.memory_map.map_size = map_size;
     g_boot_info.memory_map.descriptor_size = desc_size;
     g_boot_info.memory_map.descriptor_version = desc_ver;

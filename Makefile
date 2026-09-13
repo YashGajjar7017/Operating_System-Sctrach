@@ -17,7 +17,7 @@ LDFLAGS_EFI= -nostdlib -Wl,-subsystem:efi_application -Wl,-entry:EfiMain
 CC_KERN   ?= clang
 TARGET_KERN= -target x86_64-unknown-none-elf -ffreestanding -mno-red-zone -mcmodel=kernel -Wall -Wextra -O2
 LD_KERN   ?= ld.lld
-LDFLAGS_KERN= -T $(KERN_DIR)/linker.ld -nostdlib
+LDFLAGS_KERN= -m elf_x86_64 -T $(KERN_DIR)/linker.ld -nostdlib
 
 AS        ?= nasm
 ASFLAGS   = -f elf64
@@ -46,6 +46,7 @@ KERN_OBJS = $(BUILD_DIR)/kern_entry.o \
             $(BUILD_DIR)/kern_dom.o \
             $(BUILD_DIR)/kern_app_firewall.o \
             $(BUILD_DIR)/kern_app_terminal.o \
+            $(BUILD_DIR)/kern_string.o \
             $(BUILD_DIR)/kern_font.o
 
 .PHONY: all clean run run-iso setup_ovmf disk iso bootstrap
@@ -96,6 +97,9 @@ $(BUILD_DIR)/kern_app_firewall.o: $(KERN_DIR)/apps/firewall_app.c | $(BUILD_DIR)
 	$(CC_KERN) $(TARGET_KERN) -I$(SHARED_DIR) -I$(KERN_DIR) -c $< -o $@
 
 $(BUILD_DIR)/kern_app_terminal.o: $(KERN_DIR)/apps/terminal_app.c | $(BUILD_DIR)
+	$(CC_KERN) $(TARGET_KERN) -I$(SHARED_DIR) -I$(KERN_DIR) -c $< -o $@
+
+$(BUILD_DIR)/kern_string.o: $(KERN_DIR)/kstring.c | $(BUILD_DIR)
 	$(CC_KERN) $(TARGET_KERN) -I$(SHARED_DIR) -I$(KERN_DIR) -c $< -o $@
 
 $(BUILD_DIR)/kern_font.o: $(SHARED_DIR)/font.c | $(BUILD_DIR)

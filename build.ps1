@@ -77,6 +77,13 @@ if ((-not $Clang) -or (-not $Nasm)) {
     $Lld   = Get-Command ld.lld.exe -ErrorAction SilentlyContinue
 }
 
+if (Test-Path (Join-Path $LlvmBin "ld.lld.exe")) {
+    $LldLink = Join-Path $LlvmBin "lld-link.exe"
+    if (-not (Test-Path $LldLink)) {
+        Copy-Item (Join-Path $LlvmBin "ld.lld.exe") $LldLink
+    }
+}
+
 if (-not $Clang) {
     Write-Host "[!] Error: 'clang' compiler not found. Please run 'python scripts/bootstrap_tools.py'." -ForegroundColor Red
     exit 1
@@ -125,6 +132,7 @@ $KernelSources = @(
     @{ Src = (Join-Path $KernDir "gui\dom_engine.c"); Obj = (Join-Path $BuildDir "kern_dom.o") },
     @{ Src = (Join-Path $KernDir "apps\firewall_app.c"); Obj = (Join-Path $BuildDir "kern_app_firewall.o") },
     @{ Src = (Join-Path $KernDir "apps\terminal_app.c"); Obj = (Join-Path $BuildDir "kern_app_terminal.o") },
+    @{ Src = (Join-Path $KernDir "kstring.c"); Obj = (Join-Path $BuildDir "kern_string.o") },
     @{ Src = (Join-Path $SharedDir "font.c"); Obj = (Join-Path $BuildDir "kern_font.o") }
 )
 
@@ -137,7 +145,7 @@ foreach ($item in $KernelSources) {
 }
 
 if ($Lld) {
-    & ld.lld -T $LinkerScript -nostdlib $ObjList -o $KernelElf
+    & ld.lld -m elf_x86_64 -T $LinkerScript -nostdlib $ObjList -o $KernelElf
 } else {
     & clang -target x86_64-unknown-none-elf -nostdlib "-Wl,-T,$LinkerScript" $ObjList -o $KernelElf
 }

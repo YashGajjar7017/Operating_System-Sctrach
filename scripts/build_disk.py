@@ -13,7 +13,7 @@ import shutil
 SECTOR_SIZE = 512
 DISK_SIZE_MB = 64
 TOTAL_SECTORS = (DISK_SIZE_MB * 1024 * 1024) // SECTOR_SIZE
-SECTORS_PER_CLUSTER = 8  # 4KB clusters
+SECTORS_PER_CLUSTER = 1  # 512-byte clusters to guarantee >65525 clusters for FAT32
 RESERVED_SECTORS = 32
 NUM_FATS = 2
 
