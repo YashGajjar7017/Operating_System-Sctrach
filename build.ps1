@@ -27,13 +27,15 @@ $ToolsDir  = Join-Path $RootDir "tools"
 $VmDir     = Join-Path $RootDir "vm"
 
 # Add portable tools/ directory to PATH if present
-$W64Bin  = Join-Path $ToolsDir "w64devkit\bin"
+$LlvmBin = Join-Path $ToolsDir "llvm-mingw\bin"
 $NasmBin = Join-Path $ToolsDir "nasm"
-if (Test-Path $W64Bin)  { $env:PATH = "$W64Bin;" + $env:PATH }
+$W64Bin  = Join-Path $ToolsDir "w64devkit\bin"
+if (Test-Path $LlvmBin) { $env:PATH = "$LlvmBin;" + $env:PATH }
 if (Test-Path $NasmBin) { $env:PATH = "$NasmBin;" + $env:PATH }
+if (Test-Path $W64Bin)  { $env:PATH = "$W64Bin;"  + $env:PATH }
 
 if ($Bootstrap) {
-    Write-Host "[*] Bootstrapping portable toolchain..." -ForegroundColor Cyan
+    Write-Host "[*] Bootstrapping portable toolchain (Clang + NASM + OVMF)..." -ForegroundColor Cyan
     & python (Join-Path $ScriptDir "bootstrap_tools.py")
     exit 0
 }
@@ -54,22 +56,35 @@ Write-Host "       Xenithra OS x86_64 High-Security Build Pipeline    " -Foregro
 Write-Host "==========================================================" -ForegroundColor Cyan
 
 # Check for required tools
-$Clang = Get-Command clang -ErrorAction SilentlyContinue
-$Nasm  = Get-Command nasm -ErrorAction SilentlyContinue
-$Lld   = Get-Command ld.lld -ErrorAction SilentlyContinue
-$Python= Get-Command python -ErrorAction SilentlyContinue
+$Clang = Get-Command clang.exe -ErrorAction SilentlyContinue
+$Nasm  = Get-Command nasm.exe -ErrorAction SilentlyContinue
+$Lld   = Get-Command ld.lld.exe -ErrorAction SilentlyContinue
+$Python= Get-Command python.exe -ErrorAction SilentlyContinue
 
 if (-not $Python) {
     $Python = Get-Command python3 -ErrorAction SilentlyContinue
 }
 
+# Auto-bootstrap tools if clang or nasm is missing
+if ((-not $Clang) -or (-not $Nasm)) {
+    Write-Host "[*] Toolchain (Clang / NASM) not detected in environment." -ForegroundColor Yellow
+    Write-Host "[*] Automatically downloading portable toolchain..." -ForegroundColor Cyan
+    & python (Join-Path $ScriptDir "bootstrap_tools.py")
+    if (Test-Path $LlvmBin) { $env:PATH = "$LlvmBin;" + $env:PATH }
+    if (Test-Path $NasmBin) { $env:PATH = "$NasmBin;" + $env:PATH }
+    $Clang = Get-Command clang.exe -ErrorAction SilentlyContinue
+    $Nasm  = Get-Command nasm.exe -ErrorAction SilentlyContinue
+    $Lld   = Get-Command ld.lld.exe -ErrorAction SilentlyContinue
+}
+
 if (-not $Clang) {
-    Write-Host "[!] 'clang' not found in PATH." -ForegroundColor Yellow
-    Write-Host "    You can run 'python scripts/bootstrap_tools.py' or '.\build.ps1 -Bootstrap' to get portable compilers." -ForegroundColor Yellow
+    Write-Host "[!] Error: 'clang' compiler not found. Please run 'python scripts/bootstrap_tools.py'." -ForegroundColor Red
+    exit 1
 }
 
 if (-not $Nasm) {
-    Write-Host "[!] 'nasm' not found in PATH." -ForegroundColor Yellow
+    Write-Host "[!] Error: 'nasm' assembler not found. Please run 'python scripts/bootstrap_tools.py'." -ForegroundColor Red
+    exit 1
 }
 
 # 1. Compile UEFI Bootloader
@@ -83,16 +98,17 @@ $BootSources = @(
 
 $BootEfi = Join-Path $BuildDir "BOOTX64.EFI"
 
-if ($Clang) {
-    & clang -target x86_64-unknown-windows `
-        -ffreestanding -fshort-wchar -mno-red-zone `
-        -I$SharedDir -I$BootDir `
-        -nostdlib "-Wl,-subsystem:efi_application" "-Wl,-entry:EfiMain" `
-        -O2 -o $BootEfi $BootSources
-    Write-Host "[+] BOOTX64.EFI built successfully." -ForegroundColor Green
-} else {
-    Write-Host "[!] Skipping BOOTX64.EFI compile (clang not present)." -ForegroundColor Red
+& clang -target x86_64-unknown-windows `
+    -ffreestanding -fshort-wchar -mno-red-zone `
+    -I$SharedDir -I$BootDir `
+    -nostdlib "-Wl,-subsystem:efi_application" "-Wl,-entry:EfiMain" `
+    -O2 -o $BootEfi $BootSources
+
+if (-not (Test-Path $BootEfi)) {
+    Write-Host "[!] Error: Failed to compile BOOTX64.EFI!" -ForegroundColor Red
+    exit 1
 }
+Write-Host "[+] BOOTX64.EFI built successfully." -ForegroundColor Green
 
 # 2. Assemble and Compile Kernel
 Write-Host "`n[2/4] Assembling & Compiling Kernel with Security Subsystems (kernel.elf)..." -ForegroundColor White
@@ -112,24 +128,25 @@ $KernelSources = @(
     @{ Src = (Join-Path $SharedDir "font.c"); Obj = (Join-Path $BuildDir "kern_font.o") }
 )
 
-if ($Nasm -and $Clang) {
-    & nasm -f elf64 $KernelEntryAsm -o $KernelEntryObj
+& nasm -f elf64 $KernelEntryAsm -o $KernelEntryObj
 
-    $ObjList = @($KernelEntryObj)
-    foreach ($item in $KernelSources) {
-        & clang -target x86_64-unknown-none-elf -ffreestanding -mno-red-zone -mcmodel=kernel -I$SharedDir -I$KernDir -O2 -c $item.Src -o $item.Obj
-        $ObjList += $item.Obj
-    }
-
-    if ($Lld) {
-        & ld.lld -T $LinkerScript -nostdlib $ObjList -o $KernelElf
-    } else {
-        & clang -target x86_64-unknown-none-elf -nostdlib "-Wl,-T,$LinkerScript" $ObjList -o $KernelElf
-    }
-    Write-Host "[+] kernel.elf (Security & GUI Engine) built successfully." -ForegroundColor Green
-} else {
-    Write-Host "[!] Skipping kernel.elf compile (nasm / clang not present)." -ForegroundColor Red
+$ObjList = @($KernelEntryObj)
+foreach ($item in $KernelSources) {
+    & clang -target x86_64-unknown-none-elf -ffreestanding -mno-red-zone -mcmodel=kernel -I$SharedDir -I$KernDir -O2 -c $item.Src -o $item.Obj
+    $ObjList += $item.Obj
 }
+
+if ($Lld) {
+    & ld.lld -T $LinkerScript -nostdlib $ObjList -o $KernelElf
+} else {
+    & clang -target x86_64-unknown-none-elf -nostdlib "-Wl,-T,$LinkerScript" $ObjList -o $KernelElf
+}
+
+if (-not (Test-Path $KernelElf)) {
+    Write-Host "[!] Error: Failed to link kernel.elf!" -ForegroundColor Red
+    exit 1
+}
+Write-Host "[+] kernel.elf (Security & GUI Engine) built successfully." -ForegroundColor Green
 
 # 3. Generate Disk and ISO Images
 Write-Host "`n[3/4] Packaging FAT32 ESP Disk Image & Bootable xenithra.iso..." -ForegroundColor White
@@ -143,6 +160,7 @@ if ($Python) {
     & python $BuildIsoScript $IsoImg $BootEfi $KernelElf
 } else {
     Write-Host "[!] Python required to package disk/ISO image." -ForegroundColor Red
+    exit 1
 }
 
 # 4. Run in VirtualBox or QEMU if requested

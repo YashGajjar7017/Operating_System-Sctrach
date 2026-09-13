@@ -2,16 +2,30 @@
 """
 @file build_iso.py
 @brief Pure Python UEFI El Torito Bootable ISO 9660 Image Generator.
-Produces a bootable .iso (AuraOS.iso) suitable for sharing, CD/DVD, USB, VirtualBox, VMware, and QEMU.
+Produces a bootable .iso (xenithra.iso) suitable for sharing, CD/DVD, USB, VirtualBox, VMware, and QEMU.
 """
 
 import os
 import sys
 import struct
 import shutil
+
+# Ensure scripts directory is in sys.path so build_disk can be imported from any working directory
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+if SCRIPT_DIR not in sys.path:
+    sys.path.insert(0, SCRIPT_DIR)
+
 from build_disk import FAT32Builder, build_uefi_disk
 
 ISO_SECTOR_SIZE = 2048  # ISO 9660 sector size
+
+def pad_bytes(data, length: int, pad_char: bytes = b' ') -> bytes:
+    """Safely pad or truncate byte sequences to exact specified length."""
+    if isinstance(data, str):
+        data = data.encode('ascii')
+    if len(data) >= length:
+        return data[:length]
+    return data + pad_char * (length - len(data))
 
 def make_el_torito_catalog(efi_img_lba, efi_img_512_sectors):
     """
@@ -28,8 +42,7 @@ def make_el_torito_catalog(efi_img_lba, efi_img_512_sectors):
     val[0] = 0x01                      # Header ID
     val[1] = 0x00                      # Platform ID (80x86)
     val[2:4] = b'\x00\x00'             # Reserved
-    id_str = b'Xenithra ElTorito'
-    val[4:4+len(id_str)] = id_str
+    val[4:28] = pad_bytes(b'Xenithra ElTorito', 24, b'\x00')
     val[30] = 0x55                     # Key byte 1
     val[31] = 0xAA                     # Key byte 2
 
@@ -50,8 +63,7 @@ def make_el_torito_catalog(efi_img_lba, efi_img_512_sectors):
     sec_hdr[0] = 0x91                  # Final section header
     sec_hdr[1] = 0xEF                  # Platform ID: 0xEF = EFI
     struct.pack_into('<H', sec_hdr, 2, 1) # 1 Section entry
-    sec_id = b'EFI System Partition'
-    sec_hdr[4:4+len(sec_id)] = sec_id
+    sec_hdr[4:24] = pad_bytes(b'EFI ESP', 20, b'\x00')
     catalog[64:96] = sec_hdr
 
     # 4. Section Entry for EFI Boot Image (32 bytes)
@@ -61,13 +73,13 @@ def make_el_torito_catalog(efi_img_lba, efi_img_512_sectors):
     struct.pack_into('<H', sec_entry, 2, 0) # Load segment
     sec_entry[4] = 0x00                # System type
     sec_entry[5] = 0x00                # Unused
-    struct.pack_into('<H', sec_entry, 6, min(efi_img_512_sectors, 0xFFFF)) # Sector count in 512-byte blocks
-    struct.pack_into('<I', sec_entry, 8, efi_img_lba)                      # 2048-byte LBA of FAT ESP image
+    struct.pack_into('<H', sec_entry, 6, 1) # Sector count in 512-byte blocks
+    struct.pack_into('<I', sec_entry, 8, efi_img_lba) # 2048-byte LBA of FAT ESP image
     catalog[96:128] = sec_entry
 
     return catalog
 
-def create_iso_descriptor_set(total_iso_sectors, boot_catalog_lba):
+def create_iso_descriptor_set(total_iso_sectors, boot_catalog_lba, root_dir_lba=16):
     """Generates Primary Volume Descriptor, El Torito Boot Record, and Terminator."""
     pvd = bytearray(ISO_SECTOR_SIZE)
     # Primary Volume Descriptor (Type 1)
@@ -75,23 +87,49 @@ def create_iso_descriptor_set(total_iso_sectors, boot_catalog_lba):
     pvd[1:6] = b'CD001'
     pvd[6] = 0x01                      # Version
     pvd[7] = 0x00                      # Unused
-    pvd[8:40] = b'XENITHRA_OS                   ' # System ID
-    pvd[40:72] = b'XENITHRA_INSTALL              ' # Volume ID
+    pvd[8:40] = pad_bytes(b'XENITHRA_OS', 32, b' ') # System ID (32 bytes)
+    pvd[40:72] = pad_bytes(b'XENITHRA_INSTALL', 32, b' ') # Volume ID (32 bytes)
     struct.pack_into('<I', pvd, 80, total_iso_sectors) # Volume Space Size (LSB)
     struct.pack_into('>I', pvd, 84, total_iso_sectors) # Volume Space Size (MSB)
-    struct.pack_into('<H', pvd, 120, 1) # Volume Set Size
-    struct.pack_into('>H', pvd, 122, 1)
-    struct.pack_into('<H', pvd, 124, 1) # Volume Sequence Number
-    struct.pack_into('>H', pvd, 126, 1)
-    struct.pack_into('<H', pvd, 128, ISO_SECTOR_SIZE) # Logical Block Size
-    struct.pack_into('>H', pvd, 130, ISO_SECTOR_SIZE)
+    struct.pack_into('<H', pvd, 120, 1) # Volume Set Size (LSB)
+    struct.pack_into('>H', pvd, 122, 1) # Volume Set Size (MSB)
+    struct.pack_into('<H', pvd, 124, 1) # Volume Sequence Number (LSB)
+    struct.pack_into('>H', pvd, 126, 1) # Volume Sequence Number (MSB)
+    struct.pack_into('<H', pvd, 128, ISO_SECTOR_SIZE) # Logical Block Size (LSB)
+    struct.pack_into('>H', pvd, 130, ISO_SECTOR_SIZE) # Logical Block Size (MSB)
+
+    # Root Directory Record (34 bytes at offset 156)
+    root_rec = bytearray(34)
+    root_rec[0] = 34  # Length of Directory Record
+    root_rec[1] = 0   # Extended Attribute Record Length
+    struct.pack_into('<I', root_rec, 2, root_dir_lba)     # Location of Extent (LSB)
+    struct.pack_into('>I', root_rec, 6, root_dir_lba)     # Location of Extent (MSB)
+    struct.pack_into('<I', root_rec, 10, ISO_SECTOR_SIZE) # Data Length (LSB)
+    struct.pack_into('>I', root_rec, 14, ISO_SECTOR_SIZE) # Data Length (MSB)
+    root_rec[18:25] = bytes([126, 9, 13, 0, 0, 0, 0])    # Recording Date and Time
+    root_rec[25] = 0x02 # File Flags (Directory)
+    struct.pack_into('<H', root_rec, 28, 1) # Volume Sequence Number (LSB)
+    struct.pack_into('>H', root_rec, 30, 1) # Volume Sequence Number (MSB)
+    root_rec[32] = 1 # Length of File Identifier
+    root_rec[33] = 0 # Root identifier (0x00)
+    pvd[156:190] = root_rec
+
+    # Fill standard identifier fields with spaces
+    pvd[190:318] = b' ' * 128 # Volume Set Identifier
+    pvd[318:446] = b' ' * 128 # Publisher Identifier
+    pvd[446:574] = b' ' * 128 # Data Preparer Identifier
+    pvd[574:702] = b' ' * 128 # Application Identifier
+    pvd[702:739] = b' ' * 37  # Copyright File Identifier
+    pvd[739:775] = b' ' * 36  # Abstract File Identifier
+    pvd[775:812] = b' ' * 37  # Bibliographic File Identifier
+    pvd[880] = 0x01           # File Structure Version
 
     # El Torito Boot Record Volume Descriptor (Type 0)
     brvd = bytearray(ISO_SECTOR_SIZE)
     brvd[0] = 0x00
     brvd[1:6] = b'CD001'
     brvd[6] = 0x01
-    brvd[7:39] = b'EL TORITO SPECIFICATION' + b'\x00' * 9
+    brvd[7:39] = pad_bytes(b'EL TORITO SPECIFICATION', 32, b'\x00')
     struct.pack_into('<I', brvd, 71, boot_catalog_lba) # Boot Catalog LBA
 
     # Volume Descriptor Set Terminator (Type 255)
@@ -104,7 +142,8 @@ def create_iso_descriptor_set(total_iso_sectors, boot_catalog_lba):
 
 def build_uefi_iso(output_iso, efi_loader, kernel_elf):
     print(f"[*] Building bootable UEFI ISO: {output_iso}...")
-    temp_fat_img = "build/temp_efi_esp.img"
+    build_dir = os.path.dirname(os.path.abspath(output_iso))
+    temp_fat_img = os.path.join(build_dir, "temp_efi_esp.img")
 
     # Step 1: Create FAT32 ESP image using FAT32Builder
     build_uefi_disk(temp_fat_img, efi_loader, kernel_elf)
@@ -123,10 +162,16 @@ def build_uefi_iso(output_iso, efi_loader, kernel_elf):
     fat_lba = 20
     total_iso_sectors = fat_lba + fat_iso_sectors
 
-    pvd, brvd, term = create_iso_descriptor_set(total_iso_sectors, catalog_lba)
+    pvd, brvd, term = create_iso_descriptor_set(total_iso_sectors, catalog_lba, pvd_lba)
     catalog = make_el_torito_catalog(fat_lba, fat_512_sectors)
 
-    os.makedirs(os.path.dirname(os.path.abspath(output_iso)), exist_ok=True)
+    # Sanity check sector sizes
+    assert len(pvd) == ISO_SECTOR_SIZE, f"PVD size mismatch: {len(pvd)}"
+    assert len(brvd) == ISO_SECTOR_SIZE, f"BRVD size mismatch: {len(brvd)}"
+    assert len(term) == ISO_SECTOR_SIZE, f"VDT size mismatch: {len(term)}"
+    assert len(catalog) == ISO_SECTOR_SIZE, f"Catalog size mismatch: {len(catalog)}"
+
+    os.makedirs(build_dir, exist_ok=True)
     with open(output_iso, 'wb') as iso:
         # Write 16 reserved system sectors (32 KB)
         iso.write(b'\x00' * (system_sectors * ISO_SECTOR_SIZE))
@@ -161,3 +206,4 @@ if __name__ == "__main__":
     loader = sys.argv[2] if len(sys.argv) > 2 else "build/BOOTX64.EFI"
     kernel = sys.argv[3] if len(sys.argv) > 3 else "build/kernel.elf"
     build_uefi_iso(out_iso, loader, kernel)
+

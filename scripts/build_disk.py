@@ -204,6 +204,16 @@ class FAT32Builder:
         print(f"[+] Successfully generated Xenithra UEFI ESP Disk Image: {self.filename} ({os.path.getsize(self.filename)} bytes)")
 
 def build_uefi_disk(output_img, efi_loader, kernel_elf):
+    if not os.path.exists(efi_loader):
+        print(f"[!] Error: EFI bootloader not found at '{efi_loader}'!")
+        print("    Please compile BOOTX64.EFI before building disk/ISO.")
+        sys.exit(1)
+
+    if not os.path.exists(kernel_elf):
+        print(f"[!] Error: Kernel ELF binary not found at '{kernel_elf}'!")
+        print("    Please compile kernel.elf before building disk/ISO.")
+        sys.exit(1)
+
     fat = FAT32Builder(output_img)
 
     # 1. Create \EFI, \EFI\BOOT, and \XENITHRA
@@ -212,23 +222,17 @@ def build_uefi_disk(output_img, efi_loader, kernel_elf):
     xen_cluster = fat.add_directory(fat.root_cluster, "XENITHRA")
 
     # 2. Add BOOTX64.EFI
-    if os.path.exists(efi_loader):
-        with open(efi_loader, 'rb') as f:
-            efi_data = f.read()
-        fat.add_file(boot_cluster, "BOOTX64.EFI", efi_data)
-        print(f"[+] Added \\EFI\\BOOT\\BOOTX64.EFI ({len(efi_data)} bytes)")
-    else:
-        print(f"[!] Warning: {efi_loader} not found. Skipping.")
+    with open(efi_loader, 'rb') as f:
+        efi_data = f.read()
+    fat.add_file(boot_cluster, "BOOTX64.EFI", efi_data)
+    print(f"[+] Added \\EFI\\BOOT\\BOOTX64.EFI ({len(efi_data)} bytes)")
 
     # 3. Add KERNEL.ELF
-    if os.path.exists(kernel_elf):
-        with open(kernel_elf, 'rb') as f:
-            kernel_data = f.read()
-        fat.add_file(fat.root_cluster, "KERNEL.ELF", kernel_data)
-        fat.add_file(xen_cluster, "KERNEL.ELF", kernel_data)
-        print(f"[+] Added \\KERNEL.ELF and \\XENITHRA\\KERNEL.ELF ({len(kernel_data)} bytes)")
-    else:
-        print(f"[!] Warning: {kernel_elf} not found. Skipping.")
+    with open(kernel_elf, 'rb') as f:
+        kernel_data = f.read()
+    fat.add_file(fat.root_cluster, "KERNEL.ELF", kernel_data)
+    fat.add_file(xen_cluster, "KERNEL.ELF", kernel_data)
+    print(f"[+] Added \\KERNEL.ELF and \\XENITHRA\\KERNEL.ELF ({len(kernel_data)} bytes)")
 
     fat.build_disk()
 
@@ -237,3 +241,4 @@ if __name__ == "__main__":
     loader = sys.argv[2] if len(sys.argv) > 2 else "build/BOOTX64.EFI"
     kernel = sys.argv[3] if len(sys.argv) > 3 else "build/kernel.elf"
     build_uefi_disk(out, loader, kernel)
+

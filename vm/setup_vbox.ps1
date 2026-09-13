@@ -42,10 +42,10 @@ if (-not $VBoxManage) {
 
 Write-Host "[+] Found VirtualBox CLI: $VBoxManage" -ForegroundColor Green
 
-# 2. Ensure ISO exists
+# 2. Ensure ISO exists and is valid
 if (-not (Test-Path $IsoPath)) {
     Write-Host "[*] build/xenithra.iso not found. Building now..." -ForegroundColor Yellow
-    & powershell -File (Join-Path $RootDir "build.ps1")
+    & python (Join-Path $RootDir "scripts\build_iso.py") $IsoPath (Join-Path $RootDir "build\BOOTX64.EFI") (Join-Path $RootDir "build\kernel.elf")
 }
 
 if (-not (Test-Path $IsoPath)) {
@@ -71,6 +71,7 @@ Write-Host "[*] Configuring 64-bit UEFI, 2GB RAM, 2 CPUs, and 128MB VRAM..." -Fo
     --memory 2048 `
     --cpus 2 `
     --vram 128 `
+    --graphicscontroller vboxsvga `
     --ioapic on `
     --pae on `
     --longmode on `
@@ -88,8 +89,8 @@ Write-Host "[*] Configuring 64-bit UEFI, 2GB RAM, 2 CPUs, and 128MB VRAM..." -Fo
 Write-Host "[*] Attaching ISO ($IsoPath) as Bootable DVD..." -ForegroundColor White
 
 # Ensure SATA AHCI controller exists
-$CtlCheck = & $VBoxManage showvminfo $VmName
-if ($CtlCheck -notmatch "AHCI") {
+$CtlCheck = & $VBoxManage showvminfo $VmName --machinereadable
+if (($CtlCheck -match 'storagecontrollername.*"AHCI"') -eq $null -or ($CtlCheck -match 'storagecontrollername.*"AHCI"').Count -eq 0) {
     & $VBoxManage storagectl $VmName --name "AHCI" --add sata --controller IntelAHCI --portcount 2 --bootable on
 }
 
@@ -108,3 +109,4 @@ if (-not $NoStart) {
     Write-Host "[*] Launching '$VmName' in VirtualBox..." -ForegroundColor Cyan
     & $VBoxManage startvm $VmName
 }
+
