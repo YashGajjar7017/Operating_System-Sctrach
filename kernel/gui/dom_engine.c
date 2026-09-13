@@ -53,7 +53,7 @@ DOMElement* dom_create_card(const char *title, uint32_t bg_color) {
     s.border_color = GUI_BORDER_COLOR;
     s.border_radius = 8;
     s.padding = 12;
-    s.text_color = GUI_TEXT_WHITE;
+    s.text_color = GUI_TEXT_PRIMARY;
     s.text_scale = 1;
     return dom_create_element(DOM_CARD, s, title);
 }

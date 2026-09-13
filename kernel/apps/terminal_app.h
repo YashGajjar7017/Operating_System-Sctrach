@@ -1,6 +1,6 @@
 /**
  * @file terminal_app.h
- * @brief Secure Terminal & Diagnostic Console Application for Xenithra OS
+ * @brief Interactive Terminal & Shell Console Application for Xenithra OS
  */
 
 #ifndef _KERNEL_APPS_TERMINAL_APP_H_
@@ -8,7 +8,7 @@
 
 #include "../gui/compositor.h"
 
-/* Launch the Terminal & Diagnostic Console Window */
 Window* terminal_app_launch(void);
+void    terminal_input_char(char c);
 
 #endif /* _KERNEL_APPS_TERMINAL_APP_H_ */

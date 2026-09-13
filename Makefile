@@ -40,10 +40,13 @@ BOOT_OBJS = $(BUILD_DIR)/boot_main.o \
 
 KERN_OBJS = $(BUILD_DIR)/kern_entry.o \
             $(BUILD_DIR)/kern_main.o \
+            $(BUILD_DIR)/kern_ps2.o \
             $(BUILD_DIR)/kern_session.o \
             $(BUILD_DIR)/kern_firewall.o \
             $(BUILD_DIR)/kern_compositor.o \
             $(BUILD_DIR)/kern_dom.o \
+            $(BUILD_DIR)/kern_app_explorer.o \
+            $(BUILD_DIR)/kern_app_taskmgr.o \
             $(BUILD_DIR)/kern_app_firewall.o \
             $(BUILD_DIR)/kern_app_terminal.o \
             $(BUILD_DIR)/kern_string.o \
@@ -81,6 +84,9 @@ $(BUILD_DIR)/kern_entry.o: $(KERN_DIR)/arch/x86_64/entry.asm | $(BUILD_DIR)
 $(BUILD_DIR)/kern_main.o: $(KERN_DIR)/main.c | $(BUILD_DIR)
 	$(CC_KERN) $(TARGET_KERN) -I$(SHARED_DIR) -I$(KERN_DIR) -c $< -o $@
 
+$(BUILD_DIR)/kern_ps2.o: $(KERN_DIR)/drivers/ps2.c | $(BUILD_DIR)
+	$(CC_KERN) $(TARGET_KERN) -I$(SHARED_DIR) -I$(KERN_DIR) -c $< -o $@
+
 $(BUILD_DIR)/kern_session.o: $(KERN_DIR)/security/session.c | $(BUILD_DIR)
 	$(CC_KERN) $(TARGET_KERN) -I$(SHARED_DIR) -I$(KERN_DIR) -c $< -o $@
 
@@ -91,6 +97,12 @@ $(BUILD_DIR)/kern_compositor.o: $(KERN_DIR)/gui/compositor.c | $(BUILD_DIR)
 	$(CC_KERN) $(TARGET_KERN) -I$(SHARED_DIR) -I$(KERN_DIR) -c $< -o $@
 
 $(BUILD_DIR)/kern_dom.o: $(KERN_DIR)/gui/dom_engine.c | $(BUILD_DIR)
+	$(CC_KERN) $(TARGET_KERN) -I$(SHARED_DIR) -I$(KERN_DIR) -c $< -o $@
+
+$(BUILD_DIR)/kern_app_explorer.o: $(KERN_DIR)/apps/explorer_app.c | $(BUILD_DIR)
+	$(CC_KERN) $(TARGET_KERN) -I$(SHARED_DIR) -I$(KERN_DIR) -c $< -o $@
+
+$(BUILD_DIR)/kern_app_taskmgr.o: $(KERN_DIR)/apps/taskmgr_app.c | $(BUILD_DIR)
 	$(CC_KERN) $(TARGET_KERN) -I$(SHARED_DIR) -I$(KERN_DIR) -c $< -o $@
 
 $(BUILD_DIR)/kern_app_firewall.o: $(KERN_DIR)/apps/firewall_app.c | $(BUILD_DIR)

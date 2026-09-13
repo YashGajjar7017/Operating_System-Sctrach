@@ -1,6 +1,6 @@
 /**
  * @file main.c
- * @brief Xenithra OS 64-bit Kernel Main Entry & Desktop Environment Boot
+ * @brief Xenithra OS 64-bit Kernel Main Entry & Windows 11 Desktop Environment Boot
  */
 
 #include <stdint.h>
@@ -8,7 +8,10 @@
 #include "../shared/bootinfo.h"
 #include "security/session.h"
 #include "security/firewall.h"
+#include "drivers/ps2.h"
 #include "gui/compositor.h"
+#include "apps/explorer_app.h"
+#include "apps/taskmgr_app.h"
 #include "apps/firewall_app.h"
 #include "apps/terminal_app.h"
 
@@ -23,29 +26,61 @@ void kmain(XenithraBootInfo *boot_info) {
         g_kernel_boot_info = *boot_info;
     }
 
-    /* 2. Initialize Kernel Security & Anti-Hijack Guard */
+    /* 2. Initialize Hardware PS/2 Mouse & Keyboard Drivers */
+    uint32_t screen_w = g_kernel_boot_info.framebuffer.width ? g_kernel_boot_info.framebuffer.width : 1280;
+    uint32_t screen_h = g_kernel_boot_info.framebuffer.height ? g_kernel_boot_info.framebuffer.height : 720;
+    ps2_init(screen_w, screen_h);
+
+    /* 3. Initialize Kernel Security & Anti-Hijack Guard */
     security_init();
     security_enable_smep_smap();
 
-    /* 3. Initialize Kernel Private Firewall */
+    /* 4. Initialize Kernel Private Firewall */
     firewall_init();
 
-    /* 4. Initialize Desktop Window Compositor with GOP Framebuffer */
+    /* 5. Initialize Windows 11 Fluent Window Compositor */
     compositor_init(g_kernel_boot_info.framebuffer);
 
-    /* 5. Launch Built-in Secure GUI Applications */
+    /* 6. Launch Built-in Applications */
+    explorer_app_launch();
+    taskmgr_app_launch();
     firewall_app_launch();
     terminal_app_launch();
 
-    /* 6. Render Initial Desktop & Window Compositor State */
+    /* 7. Render Initial Desktop State */
     compositor_render();
 
-    /* 7. Kernel Main Event & Scheduling Loop */
-    while (1) {
-        /* Run periodic security audit for session hijack attempts */
-        session_guard_audit();
+    /* 8. High-Performance Hardware Event Pump & Main Scheduling Loop */
+    PS2MouseState mouse_state;
+    PS2KeyEvent key_event;
+    uint64_t loop_counter = 0;
 
-        /* Halt CPU until next hardware interrupt */
-        __asm__ volatile ("hlt");
+    while (1) {
+        loop_counter++;
+
+        /* 8.1 Poll PS/2 Mouse Hardware */
+        if (ps2_poll_mouse(&mouse_state)) {
+            compositor_update_mouse(
+                mouse_state.x,
+                mouse_state.y,
+                mouse_state.left_button,
+                mouse_state.right_button,
+                mouse_state.middle_button
+            );
+        }
+
+        /* 8.2 Poll PS/2 Keyboard Hardware */
+        if (ps2_poll_keyboard(&key_event)) {
+            if (key_event.is_pressed && (key_event.ascii || key_event.scancode)) {
+                compositor_dispatch_key(key_event.ascii, key_event.scancode, key_event.is_pressed);
+            }
+        }
+
+        /* 8.3 Periodic Background Audits and Animation Ticks */
+        if ((loop_counter & 0x7FFF) == 0) {
+            session_guard_audit();
+            compositor_tick();
+            compositor_render();
+        }
     }
 }

@@ -126,10 +126,13 @@ $LinkerScript   = Join-Path $KernDir "linker.ld"
 
 $KernelSources = @(
     @{ Src = (Join-Path $KernDir "main.c"); Obj = (Join-Path $BuildDir "kern_main.o") },
+    @{ Src = (Join-Path $KernDir "drivers\ps2.c"); Obj = (Join-Path $BuildDir "kern_ps2.o") },
     @{ Src = (Join-Path $KernDir "security\session.c"); Obj = (Join-Path $BuildDir "kern_session.o") },
     @{ Src = (Join-Path $KernDir "security\firewall.c"); Obj = (Join-Path $BuildDir "kern_firewall.o") },
     @{ Src = (Join-Path $KernDir "gui\compositor.c"); Obj = (Join-Path $BuildDir "kern_compositor.o") },
     @{ Src = (Join-Path $KernDir "gui\dom_engine.c"); Obj = (Join-Path $BuildDir "kern_dom.o") },
+    @{ Src = (Join-Path $KernDir "apps\explorer_app.c"); Obj = (Join-Path $BuildDir "kern_app_explorer.o") },
+    @{ Src = (Join-Path $KernDir "apps\taskmgr_app.c"); Obj = (Join-Path $BuildDir "kern_app_taskmgr.o") },
     @{ Src = (Join-Path $KernDir "apps\firewall_app.c"); Obj = (Join-Path $BuildDir "kern_app_firewall.o") },
     @{ Src = (Join-Path $KernDir "apps\terminal_app.c"); Obj = (Join-Path $BuildDir "kern_app_terminal.o") },
     @{ Src = (Join-Path $KernDir "kstring.c"); Obj = (Join-Path $BuildDir "kern_string.o") },
