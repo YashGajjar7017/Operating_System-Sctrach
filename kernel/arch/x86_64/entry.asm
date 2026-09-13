@@ -20,8 +20,13 @@ _start:
     mov rsp, kernel_stack_top
     and rsp, -16
 
-    ; Pass BootInfo pointer (passed in RDI from bootloader) to kmain
-    ; In System V AMD64 ABI: 1st argument = RDI
+    ; Pass BootInfo pointer to kmain (accept from RDI or RCX)
+    test rdi, rdi
+    jnz .arg_ready
+    mov rdi, rcx
+.arg_ready:
+    mov rcx, rdi
+
     call kmain
 
 .hang:

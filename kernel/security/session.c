@@ -47,18 +47,43 @@ SecureToken128 security_generate_token(void) {
     return tok;
 }
 
-/* Enable Hardware SMEP and SMAP in CR4 to prevent user-space hijack exploits */
+/* Enable Hardware SMEP and SMAP in CR4 if supported by hardware/VM */
 void security_enable_smep_smap(void) {
+    uint32_t max_leaf = 0, ebx = 0, ecx = 0, edx = 0;
+    __asm__ volatile (
+        "cpuid"
+        : "=a"(max_leaf), "=b"(ebx), "=c"(ecx), "=d"(edx)
+        : "a"(0)
+    );
+
+    if (max_leaf < 7) {
+        return;
+    }
+
+    uint32_t eax = 7;
+    ecx = 0;
+    __asm__ volatile (
+        "cpuid"
+        : "=a"(eax), "=b"(ebx), "=c"(ecx), "=d"(edx)
+        : "a"(eax), "c"(ecx)
+    );
+
     uint64_t cr4 = 0;
     __asm__ volatile ("mov %%cr4, %0" : "=r"(cr4));
 
-    /* Bit 20: SMEP (Supervisor Mode Execution Prevention) */
-    /* Bit 21: SMAP (Supervisor Mode Access Prevention) */
-    /* Enable if supported by CPU, ignore if VM rejects */
-    cr4 |= (1 << 20); /* SMEP */
-    
-    /* Write back CR4 */
-    __asm__ volatile ("mov %0, %%cr4" : : "r"(cr4) : "memory");
+    uint64_t new_cr4 = cr4;
+    /* Bit 7 in EBX: SMEP -> CR4 Bit 20 */
+    if (ebx & (1 << 7)) {
+        new_cr4 |= (1ULL << 20);
+    }
+    /* Bit 20 in EBX: SMAP -> CR4 Bit 21 */
+    if (ebx & (1 << 20)) {
+        new_cr4 |= (1ULL << 21);
+    }
+
+    if (new_cr4 != cr4) {
+        __asm__ volatile ("mov %0, %%cr4" : : "r"(new_cr4) : "memory");
+    }
 }
 
 void security_init(void) {

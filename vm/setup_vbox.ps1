@@ -11,7 +11,8 @@ param (
     [switch]$NoStart
 )
 
-$ErrorActionPreference = "Stop"
+$ErrorActionPreference = "Continue"
+$PSNativeCommandUseErrorActionPreference = $false
 
 $RootDir = Split-Path -Parent $PSScriptRoot
 $IsoPath = Join-Path $RootDir "build\xenithra.iso"
@@ -59,6 +60,13 @@ $VmExists = $ExistingVms -match "`"$VmName`""
 
 if ($VmExists) {
     Write-Host "[+] Existing VirtualBox VM '$VmName' found. Updating configuration..." -ForegroundColor Cyan
+    # Stop running VM if it is currently active
+    $RunningVms = & $VBoxManage list runningvms
+    if ($RunningVms -match "`"$VmName`"") {
+        Write-Host "[*] Stopping running instance of '$VmName'..." -ForegroundColor Yellow
+        & $VBoxManage controlvm $VmName poweroff 2>$null
+        Start-Sleep -Seconds 2
+    }
 } else {
     Write-Host "[*] Creating new VirtualBox VM '$VmName'..." -ForegroundColor Cyan
     & $VBoxManage createvm --name $VmName --ostype "Other_64" --register
@@ -88,15 +96,46 @@ Write-Host "[*] Configuring 64-bit UEFI, 2GB RAM, 2 CPUs, and 128MB VRAM..." -Fo
 $DiskImg = Join-Path $RootDir "build\disk.img"
 $VdiPath = Join-Path $RootDir "build\disk.vdi"
 
+# Helper function to find registered UUID for a disk path in VirtualBox media registry
+function Get-RegisteredDiskUuid {
+    param ([string]$Path)
+    $HddList = & $VBoxManage list hdds 2>$null
+    $CurrentUuid = $null
+    foreach ($line in $HddList) {
+        if ($line -match "^UUID:\s+([a-f0-9\-]+)") {
+            $CurrentUuid = $matches[1]
+        }
+        if ($line -match "Location:\s+.*disk\.vdi") {
+            return $CurrentUuid
+        }
+    }
+    return $null
+}
+
 # Convert disk.img to disk.vdi if disk.img is present and disk.vdi is missing or older
 if (Test-Path $DiskImg) {
     if ((-not (Test-Path $VdiPath)) -or ((Get-Item $DiskImg).LastWriteTime -gt (Get-Item $VdiPath).LastWriteTime)) {
         Write-Host "[*] Converting disk.img to VirtualBox native VDI format ($VdiPath)..." -ForegroundColor Cyan
+        $RegisteredUuid = Get-RegisteredDiskUuid $VdiPath
+        
+        # Detach existing medium if attached
+        & $VBoxManage storageattach $VmName --storagectl "AHCI" --port 1 --device 0 --type hdd --medium none -ErrorAction SilentlyContinue 2>$null
+        
         if (Test-Path $VdiPath) {
-            & $VBoxManage closemedium disk $VdiPath --delete -ErrorAction SilentlyContinue 2>$null
             Remove-Item $VdiPath -Force -ErrorAction SilentlyContinue
         }
         & $VBoxManage convertfromraw $DiskImg $VdiPath --format VDI
+
+        # If a UUID was registered in VirtualBox, sync the newly created VDI's UUID to match
+        if ($RegisteredUuid) {
+            & $VBoxManage internalcommands sethduuid $VdiPath $RegisteredUuid 2>$null
+        }
+    } else {
+        # Ensure UUID in existing VDI matches VirtualBox's media registry
+        $RegisteredUuid = Get-RegisteredDiskUuid $VdiPath
+        if ($RegisteredUuid) {
+            & $VBoxManage internalcommands sethduuid $VdiPath $RegisteredUuid 2>$null
+        }
     }
 }
 

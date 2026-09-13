@@ -160,72 +160,161 @@ static EFI_STATUS load_kernel_file(
         return status;
     }
 
-    /* Load each PT_LOAD segment */
-    UINT64 min_phys = 0xFFFFFFFFFFFFFFFFULL;
-    UINT64 max_phys = 0;
+    /* Calculate memory boundaries of all PT_LOAD segments */
+    UINT64 min_vaddr = 0xFFFFFFFFFFFFFFFFULL;
+    UINT64 max_vaddr = 0;
+    for (int i = 0; i < ehdr.e_phnum; i++) {
+        if (phdrs[i].p_type != PT_LOAD) continue;
+        if (phdrs[i].p_vaddr < min_vaddr) min_vaddr = phdrs[i].p_vaddr;
+        if (phdrs[i].p_vaddr + phdrs[i].p_memsz > max_vaddr) {
+            max_vaddr = phdrs[i].p_vaddr + phdrs[i].p_memsz;
+        }
+    }
 
+    if (min_vaddr >= max_vaddr) {
+        SystemTable->BootServices->FreePool(phdrs);
+        kernel_file->Close(kernel_file);
+        root_dir->Close(root_dir);
+        return EFI_LOAD_ERROR;
+    }
+
+    UINT64 kernel_mem_span = max_vaddr - min_vaddr;
+    UINTN total_pages = (kernel_mem_span + 0xFFF) / 0x1000;
+
+    /* Try fixed address 0x200000 (2MB physical) first */
+    EFI_PHYSICAL_ADDRESS alloc_base = 0x200000ULL;
+    status = SystemTable->BootServices->AllocatePages(
+        AllocateAddress,
+        EfiLoaderData,
+        total_pages,
+        &alloc_base
+    );
+
+    if (EFI_ERROR(status)) {
+        /* Fallback: allocate any available pages */
+        status = SystemTable->BootServices->AllocatePages(
+            AllocateAnyPages,
+            EfiLoaderData,
+            total_pages,
+            &alloc_base
+        );
+        if (EFI_ERROR(status)) {
+            SystemTable->BootServices->FreePool(phdrs);
+            kernel_file->Close(kernel_file);
+            root_dir->Close(root_dir);
+            return status;
+        }
+    }
+
+    /* Zero destination memory buffer */
+    SystemTable->BootServices->SetMem((VOID*)alloc_base, total_pages * 0x1000, 0);
+
+    /* Copy each PT_LOAD segment into contiguous buffer relative to min_vaddr */
     for (int i = 0; i < ehdr.e_phnum; i++) {
         if (phdrs[i].p_type != PT_LOAD) continue;
 
-        /* Physical load target: map virtual 0xFFFFFFFF80000000 -> physical 0x200000 (2MB) or direct paddr */
-        UINT64 segment_phys = phdrs[i].p_paddr;
-        if (segment_phys == 0 || segment_phys == phdrs[i].p_vaddr) {
-            /* Higher half kernel mapping translation */
-            if (phdrs[i].p_vaddr >= 0xFFFFFFFF80000000ULL) {
-                segment_phys = phdrs[i].p_vaddr - 0xFFFFFFFF80000000ULL + 0x200000ULL;
-            } else {
-                segment_phys = phdrs[i].p_vaddr;
-            }
-        }
+        UINT64 seg_offset = phdrs[i].p_vaddr - min_vaddr;
+        VOID *seg_dest = (VOID*)(alloc_base + seg_offset);
 
-        UINTN pages = (phdrs[i].p_memsz + 0xFFF) / 0x1000;
-        EFI_PHYSICAL_ADDRESS alloc_addr = segment_phys;
-
-        status = SystemTable->BootServices->AllocatePages(
-            AllocateAddress,
-            EfiLoaderData,
-            pages,
-            &alloc_addr
-        );
-
-        if (EFI_ERROR(status)) {
-            /* Fallback: allocate any page if fixed address is taken */
-            status = SystemTable->BootServices->AllocatePages(
-                AllocateAnyPages,
-                EfiLoaderData,
-                pages,
-                &alloc_addr
-            );
-            if (EFI_ERROR(status)) {
-                SystemTable->BootServices->FreePool(phdrs);
-                kernel_file->Close(kernel_file);
-                root_dir->Close(root_dir);
-                return status;
-            }
-        }
-
-        /* Zero destination memory */
-        SystemTable->BootServices->SetMem((VOID*)alloc_addr, pages * 0x1000, 0);
-
-        /* Read segment bytes */
         if (phdrs[i].p_filesz > 0) {
             kernel_file->SetPosition(kernel_file, phdrs[i].p_offset);
             UINTN read_size = phdrs[i].p_filesz;
-            kernel_file->Read(kernel_file, &read_size, (VOID*)alloc_addr);
+            kernel_file->Read(kernel_file, &read_size, seg_dest);
         }
-
-        if (alloc_addr < min_phys) min_phys = alloc_addr;
-        if (alloc_addr + pages * 0x1000 > max_phys) max_phys = alloc_addr + pages * 0x1000;
     }
 
     *out_entry_point = ehdr.e_entry;
-    *out_phys_base = min_phys;
-    *out_size = (max_phys > min_phys) ? (max_phys - min_phys) : 0;
+    *out_phys_base = alloc_base;
+    *out_size = total_pages * 0x1000;
 
     SystemTable->BootServices->FreePool(phdrs);
     kernel_file->Close(kernel_file);
     root_dir->Close(root_dir);
 
+    return EFI_SUCCESS;
+}
+
+/* Setup 4-level Paging for Higher-Half Kernel Transition */
+static EFI_STATUS setup_kernel_page_tables(EFI_SYSTEM_TABLE *SystemTable, UINT64 kernel_phys_base, UINT64 fb_base, UINT64 fb_size, UINT64 *out_pml4_phys) {
+    EFI_STATUS status;
+    EFI_PHYSICAL_ADDRESS pt_pages = 0;
+    (void)fb_size;
+
+    /*
+     * We allocate 12 pages:
+     * - Page 0: PML4 (Level 4)
+     * - Page 1: PDPT_low (Level 3 for 0-8GB identity mapping)
+     * - Page 2: PDPT_high (Level 3 for higher-half 0xFFFFFF8000000000 mapping)
+     * - Pages 3..10: PD_low[0..7] (0-8GB identity mapped using 2MB huge pages)
+     * - Page 11: PD_kernel (0xFFFFFFFF80000000 -> kernel_phys_base 2MB huge pages)
+     */
+    UINTN total_pages = 12;
+    status = SystemTable->BootServices->AllocatePages(
+        AllocateAnyPages,
+        EfiRuntimeServicesData,
+        total_pages,
+        &pt_pages
+    );
+    if (EFI_ERROR(status) || !pt_pages) {
+        return status;
+    }
+
+    SystemTable->BootServices->SetMem((VOID*)pt_pages, total_pages * 4096, 0);
+
+    uint64_t *pml4      = (uint64_t*)(pt_pages + 0 * 4096);
+    uint64_t *pdpt_low  = (uint64_t*)(pt_pages + 1 * 4096);
+    uint64_t *pdpt_high = (uint64_t*)(pt_pages + 2 * 4096);
+    uint64_t *pd_kernel = (uint64_t*)(pt_pages + 11 * 4096);
+
+    uint64_t pdpt_low_phys  = pt_pages + 1 * 4096;
+    uint64_t pdpt_high_phys = pt_pages + 2 * 4096;
+    uint64_t pd_kernel_phys = pt_pages + 11 * 4096;
+
+    /* 1. PML4:
+     * - Entry 0 maps 0x0000000000000000 (Identity 0-512GB) -> pdpt_low
+     * - Entry 511 maps 0xFFFFFF8000000000 (Higher Half) -> pdpt_high
+     */
+    pml4[0]   = pdpt_low_phys | 0x03;   /* Present | Writable */
+    pml4[511] = pdpt_high_phys | 0x03; /* Present | Writable */
+
+    /* 2. PDPT Low: Identity map 0 - 8GB using 8 PD tables (2MB huge pages) */
+    for (uint64_t g = 0; g < 8; g++) {
+        uint64_t *pd_low = (uint64_t*)(pt_pages + (3 + g) * 4096);
+        uint64_t pd_low_phys = pt_pages + (3 + g) * 4096;
+        pdpt_low[g] = pd_low_phys | 0x03;
+
+        uint64_t g_base = g * 0x40000000ULL; /* 1GB per PDPT entry */
+        for (uint64_t i = 0; i < 512; i++) {
+            pd_low[i] = (g_base + i * 0x200000ULL) | 0x83; /* Present | Writable | 2MB Page */
+        }
+    }
+
+    /* If Framebuffer is above 8GB, map the high 1GB entry into identity */
+    if (fb_base >= 0x200000000ULL) { /* >= 8GB */
+        uint64_t fb_pdpt_idx = (fb_base >> 30) & 0x1FF;
+        if (fb_pdpt_idx < 512 && pdpt_low[fb_pdpt_idx] == 0) {
+            pdpt_low[fb_pdpt_idx] = (pt_pages + 10 * 4096) | 0x03;
+        }
+    }
+
+    /* 3. PDPT High:
+     * Entry 510 in top 512GB PML4 maps 0xFFFFFFFF80000000 - 0xFFFFFFFFBFFFFFFF (1GB) -> pd_kernel
+     */
+    pdpt_high[510] = pd_kernel_phys | 0x03;
+
+    /* 4. PD Kernel:
+     * Virtual 0xFFFFFFFF80000000 (Index 0): Physical 0x00000000
+     * Virtual 0xFFFFFFFF80200000 (Index 1): kernel_phys_base (Where kernel .text starts)
+     */
+    for (uint64_t i = 0; i < 512; i++) {
+        if (i == 0) {
+            pd_kernel[0] = 0x00000000ULL | 0x83;
+        } else {
+            pd_kernel[i] = (kernel_phys_base + (i - 1) * 0x200000ULL) | 0x83;
+        }
+    }
+
+    *out_pml4_phys = pt_pages;
     return EFI_SUCCESS;
 }
 
@@ -301,65 +390,90 @@ EFI_STATUS EFIAPI EfiMain(EFI_HANDLE ImageHandle, EFI_SYSTEM_TABLE *SystemTable)
     g_boot_info.kernel_size_bytes = kernel_size;
     g_boot_info.uefi_system_table = (uint64_t)SystemTable;
 
-    /* 7. Retrieve UEFI Memory Map */
-    UINTN map_size = 0;
+    /* 7. Setup Higher-Half 4-Level Page Tables */
+    UINT64 pml4_phys = 0;
+    status = setup_kernel_page_tables(
+        SystemTable,
+        kernel_phys,
+        g_boot_info.framebuffer.base_address,
+        g_boot_info.framebuffer.buffer_size,
+        &pml4_phys
+    );
+    if (EFI_ERROR(status)) {
+        return status;
+    }
+
+    /* 8. Retrieve UEFI Memory Map and Exit Boot Services */
+    UINTN map_size = 16384;
     EFI_MEMORY_DESCRIPTOR *mmap = NULL;
     UINTN map_key = 0;
     UINTN desc_size = 0;
     UINT32 desc_ver = 0;
-
-    /* Get required memory map size */
-    status = SystemTable->BootServices->GetMemoryMap(&map_size, mmap, &map_key, &desc_size, &desc_ver);
-    map_size += 4 * desc_size; /* Add extra room for allocation */
 
     status = SystemTable->BootServices->AllocatePool(EfiLoaderData, map_size, (VOID**)&mmap);
     if (EFI_ERROR(status) || !mmap) {
         return status;
     }
 
-    status = SystemTable->BootServices->GetMemoryMap(&map_size, mmap, &map_key, &desc_size, &desc_ver);
-    if (EFI_ERROR(status)) {
-        return status;
-    }
-
-    /* Calculate RAM statistics */
-    uint64_t total_ram = 0;
-    uint64_t usable_ram = 0;
-    UINTN desc_count = map_size / desc_size;
-
-    for (UINTN i = 0; i < desc_count; i++) {
-        EFI_MEMORY_DESCRIPTOR *desc = (EFI_MEMORY_DESCRIPTOR*)((uint8_t*)mmap + i * desc_size);
-        uint64_t bytes = desc->NumberOfPages * 4096;
-        total_ram += bytes;
-        if (desc->Type == EfiConventionalMemory || desc->Type == EfiBootServicesCode || desc->Type == EfiBootServicesData) {
-            usable_ram += bytes;
+    while (1) {
+        UINTN current_size = map_size;
+        status = SystemTable->BootServices->GetMemoryMap(&current_size, mmap, &map_key, &desc_size, &desc_ver);
+        if (status == EFI_BUFFER_TOO_SMALL) {
+            SystemTable->BootServices->FreePool(mmap);
+            map_size = current_size + 4096;
+            status = SystemTable->BootServices->AllocatePool(EfiLoaderData, map_size, (VOID**)&mmap);
+            if (EFI_ERROR(status)) return status;
+            continue;
         }
-    }
-
-    g_boot_info.memory_map.map = (XenithraMemoryDescriptor*)mmap;
-    g_boot_info.memory_map.map_size = map_size;
-    g_boot_info.memory_map.descriptor_size = desc_size;
-    g_boot_info.memory_map.descriptor_version = desc_ver;
-    g_boot_info.memory_map.total_memory_bytes = total_ram;
-    g_boot_info.memory_map.usable_memory_bytes = usable_ram;
-
-    /* 8. Exit Boot Services */
-    status = SystemTable->BootServices->ExitBootServices(ImageHandle, map_key);
-    if (EFI_ERROR(status)) {
-        /* Retry once if map changed */
-        map_size += 2 * desc_size;
-        SystemTable->BootServices->GetMemoryMap(&map_size, mmap, &map_key, &desc_size, &desc_ver);
-        status = SystemTable->BootServices->ExitBootServices(ImageHandle, map_key);
         if (EFI_ERROR(status)) {
             return status;
         }
+
+        /* Calculate RAM statistics */
+        uint64_t total_ram = 0;
+        uint64_t usable_ram = 0;
+        UINTN desc_count = current_size / desc_size;
+
+        for (UINTN i = 0; i < desc_count; i++) {
+            EFI_MEMORY_DESCRIPTOR *desc = (EFI_MEMORY_DESCRIPTOR*)((uint8_t*)mmap + i * desc_size);
+            uint64_t bytes = desc->NumberOfPages * 4096;
+            total_ram += bytes;
+            if (desc->Type == EfiConventionalMemory || desc->Type == EfiBootServicesCode || desc->Type == EfiBootServicesData) {
+                usable_ram += bytes;
+            }
+        }
+
+        g_boot_info.memory_map.map = (XenithraMemoryDescriptor*)mmap;
+        g_boot_info.memory_map.map_size = current_size;
+        g_boot_info.memory_map.descriptor_size = desc_size;
+        g_boot_info.memory_map.descriptor_version = desc_ver;
+        g_boot_info.memory_map.total_memory_bytes = total_ram;
+        g_boot_info.memory_map.usable_memory_bytes = usable_ram;
+
+        /* Attempt to Exit Boot Services */
+        status = SystemTable->BootServices->ExitBootServices(ImageHandle, map_key);
+        if (!EFI_ERROR(status)) {
+            break; /* Successfully transitioned out of UEFI Boot Services */
+        }
     }
 
-    /* 9. Jump to 64-bit Kernel Entry Point (System V AMD64 ABI: RDI = BootInfo*) */
-    typedef void (*KernelEntryPoint)(XenithraBootInfo *boot_info);
-    KernelEntryPoint kernel_main = (KernelEntryPoint)kernel_entry;
+    /* 9. Switch to Kernel 4-Level Page Tables (CR3) */
+    __asm__ volatile (
+        "mov %0, %%cr3"
+        :
+        : "r"(pml4_phys)
+        : "memory"
+    );
 
-    kernel_main(&g_boot_info);
+    /* 10. Jump to 64-bit Kernel Entry Point (System V AMD64 ABI: RDI = BootInfo*, MS x64 ABI: RCX = BootInfo*) */
+    __asm__ volatile (
+        "mov %0, %%rdi\n\t"
+        "mov %0, %%rcx\n\t"
+        "jmp *%1\n\t"
+        :
+        : "r"(&g_boot_info), "r"(kernel_entry)
+        : "rdi", "rcx", "memory"
+    );
 
     /* Should never return */
     while (1) {
@@ -368,3 +482,4 @@ EFI_STATUS EFIAPI EfiMain(EFI_HANDLE ImageHandle, EFI_SYSTEM_TABLE *SystemTable)
 
     return EFI_SUCCESS;
 }
+
