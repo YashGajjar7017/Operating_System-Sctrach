@@ -13,6 +13,8 @@
 #include "sched/sched.h"
 #include "gui/anim.h"
 #include "gui/compositor.h"
+#include "gui/v8_engine.h"
+#include "apps/browser_app.h"
 #include "apps/explorer_app.h"
 #include "apps/taskmgr_app.h"
 #include "apps/firewall_app.h"
@@ -51,11 +53,12 @@ void kmain(XenithraBootInfo *boot_info) {
     /* 6. Initialize Kernel Private Firewall */
     firewall_init();
 
-    /* 7. Initialize Windows 11 Fluent Window Compositor */
+    /* 7. Initialize Windows 11 Fluent Window Compositor & V8 JavaScript Bridge */
     compositor_init(g_kernel_boot_info.framebuffer);
+    v8_engine_init();
 
-    /* 8. Launch Windows 11 File Explorer cleanly at startup */
-    explorer_app_launch();
+    /* 8. Launch Modern Microsoft Edge / Google React App at startup */
+    browser_app_launch();
 
     /* 9. Render Initial Windows 11 Desktop State */
     compositor_render();
@@ -86,9 +89,10 @@ void kmain(XenithraBootInfo *boot_info) {
             }
         }
 
-        /* 10.3 Preemptive Sched & Compositor 60 FPS Animation Ticks */
+        /* 10.3 Preemptive Sched, V8 Engine & Compositor 60 FPS Animation Ticks */
         if ((loop_counter & 0x3FFF) == 0) {
             sched_tick();
+            v8_engine_tick();
             session_guard_audit();
             compositor_tick();
             compositor_render();

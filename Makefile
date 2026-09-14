@@ -49,6 +49,8 @@ KERN_OBJS = $(BUILD_DIR)/kern_entry.o \
             $(BUILD_DIR)/kern_compositor.o \
             $(BUILD_DIR)/kern_anim.o \
             $(BUILD_DIR)/kern_dom.o \
+            $(BUILD_DIR)/kern_v8.o \
+            $(BUILD_DIR)/kern_app_browser.o \
             $(BUILD_DIR)/kern_app_explorer.o \
             $(BUILD_DIR)/kern_app_taskmgr.o \
             $(BUILD_DIR)/kern_app_firewall.o \
@@ -125,6 +127,12 @@ $(BUILD_DIR)/kern_app_taskmgr.o: $(KERN_DIR)/apps/taskmgr_app.c | $(BUILD_DIR)
 	$(CC_KERN) $(TARGET_KERN) -I$(SHARED_DIR) -I$(KERN_DIR) -c $< -o $@
 
 $(BUILD_DIR)/kern_app_firewall.o: $(KERN_DIR)/apps/firewall_app.c | $(BUILD_DIR)
+	$(CC_KERN) $(TARGET_KERN) -I$(SHARED_DIR) -I$(KERN_DIR) -c $< -o $@
+
+$(BUILD_DIR)/kern_v8.o: $(KERN_DIR)/gui/v8_engine.c | $(BUILD_DIR)
+	$(CC_KERN) $(TARGET_KERN) -I$(SHARED_DIR) -I$(KERN_DIR) -c $< -o $@
+
+$(BUILD_DIR)/kern_app_browser.o: $(KERN_DIR)/apps/browser_app.c | $(BUILD_DIR)
 	$(CC_KERN) $(TARGET_KERN) -I$(SHARED_DIR) -I$(KERN_DIR) -c $< -o $@
 
 $(BUILD_DIR)/kern_app_terminal.o: $(KERN_DIR)/apps/terminal_app.c | $(BUILD_DIR)

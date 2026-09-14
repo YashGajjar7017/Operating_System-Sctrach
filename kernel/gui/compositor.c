@@ -4,8 +4,10 @@
  */
 
 #include "compositor.h"
+#include "v8_engine.h"
 #include "../kstring.h"
 #include "../../shared/font.h"
+#include "../apps/browser_app.h"
 #include "../apps/explorer_app.h"
 #include "../apps/taskmgr_app.h"
 #include "../apps/firewall_app.h"
@@ -88,6 +90,7 @@ void compositor_toggle_power_menu(void) {
 /* Desktop Icons Launch Actions */
 static void on_launch_this_pc(void)    { explorer_app_launch(); }
 static void on_launch_explorer(void)   { explorer_app_launch(); }
+static void on_launch_browser(void)    { browser_app_launch(); }
 static void on_launch_vlc(void)        { vlc_app_launch(); }
 static void on_launch_installer(void)  { installer_app_launch(); }
 static void on_launch_diskclone(void)  { diskclone_app_launch(); }
@@ -100,8 +103,8 @@ static DesktopIcon g_desktop_icons[MAX_DESKTOP_ICONS] = {
     /* Left Column 1 (X: 16) */
     {"This PC",          "PC",   GUI_ACCENT_BLUE,   0, 0, on_launch_this_pc},
     {"Recycle Bin",      "RB",   0x0064748B,        0, 1, on_launch_this_pc},
-    {"Personal - Edge",  "EDGE", 0x000078D4,        0, 2, on_launch_terminal},
-    {"Google Chrome",    "CRM",  0x00EA4335,        0, 3, on_launch_terminal},
+    {"Personal - Edge",  "EDGE", 0x000078D4,        0, 2, on_launch_browser},
+    {"Google Chrome",    "CRM",  0x00EA4335,        0, 3, on_launch_browser},
     {"iTunes",           "ITN",  0x00EC4899,        0, 4, on_launch_vlc},
     {"Antigravity IDE",  "AGY",  0x00A855F7,        0, 5, on_launch_terminal},
     {"VLC player",       "VLC",  GUI_ACCENT_ORANGE, 0, 6, on_launch_vlc},
@@ -765,8 +768,13 @@ static void render_taskbar(void) {
     dock_x += icon_btn_w + 4;
 
     /* 3. Edge Browser */
-    gui_fill_rounded_rect(dock_x, start_y, icon_btn_w, icon_btn_h, 6, 0x00101624);
+    Window *br_win = window_get_by_tag("browser");
+    uint32_t br_bg = (br_win && br_win->is_focused && !br_win->is_minimized) ? GUI_BG_CARD_HOVER : 0x00101624;
+    gui_fill_rounded_rect(dock_x, start_y, icon_btn_w, icon_btn_h, 6, br_bg);
     gui_draw_fluent_icon_edge(dock_x + 5, start_y + 4);
+    if (br_win && br_win->id != 0) {
+        gui_fill_rounded_rect(dock_x + 14, ty + TASKBAR_HEIGHT - 3, 12, 2, 1, GUI_ACCENT_CYAN);
+    }
     dock_x += icon_btn_w + 4;
 
     /* 4. App Store / Installer */
@@ -1124,9 +1132,16 @@ void compositor_update_mouse(int x, int y, uint8_t left_btn, uint8_t right_btn, 
                 return;
             }
 
-            /* 3. Edge / Terminal */
+            /* 3. Edge / Browser */
             if (x >= 100 && x <= 140) {
-                terminal_app_launch();
+                Window *w = window_get_by_tag("browser");
+                if (w) {
+                    if (w->is_minimized) window_restore(w);
+                    else if (w->is_focused) window_minimize(w);
+                    else window_focus(w);
+                } else {
+                    browser_app_launch();
+                }
                 g_mouse.prev_left = left_btn;
                 compositor_render();
                 return;
@@ -1294,7 +1309,7 @@ void compositor_update_mouse(int x, int y, uint8_t left_btn, uint8_t right_btn, 
                         else if (i == 4) taskmgr_app_launch();
                         else if (i == 5) firewall_app_launch();
                         else if (i == 6) terminal_app_launch();
-                        else if (i == 7) terminal_app_launch();
+                        else if (i == 7) browser_app_launch();
 
                         g_start_menu_open = 0;
                         g_power_menu_open = 0;

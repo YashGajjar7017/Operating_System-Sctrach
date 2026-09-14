@@ -152,6 +152,8 @@ $KernelSources = @(
     @{ Src = (Join-Path $KernDir "gui\compositor.c"); Obj = (Join-Path $BuildDir "kern_compositor.o") },
     @{ Src = (Join-Path $KernDir "gui\anim.c"); Obj = (Join-Path $BuildDir "kern_anim.o") },
     @{ Src = (Join-Path $KernDir "gui\dom_engine.c"); Obj = (Join-Path $BuildDir "kern_dom.o") },
+    @{ Src = (Join-Path $KernDir "gui\v8_engine.c"); Obj = (Join-Path $BuildDir "kern_v8.o") },
+    @{ Src = (Join-Path $KernDir "apps\browser_app.c"); Obj = (Join-Path $BuildDir "kern_app_browser.o") },
     @{ Src = (Join-Path $KernDir "apps\explorer_app.c"); Obj = (Join-Path $BuildDir "kern_app_explorer.o") },
     @{ Src = (Join-Path $KernDir "apps\taskmgr_app.c"); Obj = (Join-Path $BuildDir "kern_app_taskmgr.o") },
     @{ Src = (Join-Path $KernDir "apps\firewall_app.c"); Obj = (Join-Path $BuildDir "kern_app_firewall.o") },
@@ -188,12 +190,15 @@ Write-Host "[+] kernel.elf (Security & GUI Engine) built successfully." -Foregro
 Write-Host "`n[3/4] Packaging FAT32 ESP Disk Image & Bootable xenithra.iso..." -ForegroundColor White
 $DiskImg = Join-Path $BuildDir "disk.img"
 $IsoImg  = Join-Path $BuildDir "xenithra.iso"
+$IsoBackup = Join-Path $BuildDir "xenithra_backup.iso"
 $BuildDiskScript = Join-Path $ScriptDir "build_disk.py"
 $BuildIsoScript  = Join-Path $ScriptDir "build_iso.py"
 
 if ($Python) {
     & python $BuildDiskScript $DiskImg $BootEfi $KernelElf
     & python $BuildIsoScript $IsoImg $BootEfi $KernelElf
+    Copy-Item $IsoImg $IsoBackup -Force
+    Write-Host "[+] Backup ISO created -> build/xenithra_backup.iso" -ForegroundColor Green
 } else {
     Write-Host "[!] Python required to package disk/ISO image." -ForegroundColor Red
     exit 1
