@@ -11,6 +11,21 @@ export default defineConfig({
     },
   },
   server: {
+    host: '127.0.0.1',
     port: 5173,
+    strictPort: true,
+  },
+  build: {
+    target: 'esnext',
+    outDir: 'dist',
+    assetsInlineLimit: 10485760, // 10MB inline limit for self-contained zero-latency offline loading
+    cssCodeSplit: false,
+    sourcemap: false,
+    minify: 'esbuild',
+    rollupOptions: {
+      output: {
+        manualChunks: undefined, // Consolidate into unified chunk for instant single-read memory paging
+      },
+    },
   },
 });

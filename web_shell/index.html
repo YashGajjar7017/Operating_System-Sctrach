@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Xenithra OS Desktop</title>
+  <link rel="stylesheet" href="style.css">
+  <!-- SignalR Client Library -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/microsoft-signalr/8.0.0/signalr.min.js"></script>
+</head>
+<body oncontextmenu="return false;">
+
+  <!-- Desktop Workspace Area -->
+  <main id="desktop" class="desktop-wallpaper">
+    
+    <!-- Pinned Desktop Widgets & Telemetry Center -->
+    <div class="system-dashboard-card glass-panel">
+      <div class="card-header">
+        <div class="status-indicator online"></div>
+        <span class="card-title">Xenithra System Kernel & Daemon</span>
+        <span id="uptime-badge" class="badge">Uptime: 00:00</span>
+      </div>
+
+      <div class="metrics-grid">
+        <!-- CPU Metric -->
+        <div class="metric-box">
+          <div class="metric-label">CPU Load</div>
+          <div class="metric-value" id="cpu-val">-- %</div>
+          <div class="progress-bar-bg">
+            <div class="progress-bar-fill" id="cpu-bar" style="width: 0%;"></div>
+          </div>
+        </div>
+
+        <!-- RAM Metric -->
+        <div class="metric-box">
+          <div class="metric-label">Memory Used</div>
+          <div class="metric-value" id="ram-val">-- MB</div>
+          <div class="progress-bar-bg">
+            <div class="progress-bar-fill" id="ram-bar" style="width: 0%;"></div>
+          </div>
+        </div>
+
+        <!-- Disk Metric -->
+        <div class="metric-box">
+          <div class="metric-label">Disk Storage</div>
+          <div class="metric-value" id="disk-val">-- %</div>
+          <div class="progress-bar-bg">
+            <div class="progress-bar-fill" id="disk-bar" style="width: 0%;"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Quick Command Input Prompt -->
+      <div class="command-launcher">
+        <input type="text" id="cmd-input" placeholder="Type a system command or launch app (e.g., 'terminal', 'htop', 'explorer')..." autocomplete="off">
+        <button id="cmd-run-btn" class="fluent-btn primary">Run</button>
+      </div>
+      <div id="cmd-feedback" class="cmd-feedback-msg">Ready for input.</div>
+    </div>
+
+    <!-- Active Window Area (Dynamic Modals) -->
+    <div id="window-container"></div>
+
+  </main>
+
+  <!-- Windows 11 Fluent Centered Taskbar -->
+  <footer id="taskbar" class="taskbar-dock glass-panel">
+    
+    <!-- Start Button & Search Pill -->
+    <button id="start-btn" class="taskbar-btn start-icon" title="Start Menu">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor">
+        <rect x="2" y="2" width="9" height="9" rx="1.5" fill="#00A4EF"/>
+        <rect x="13" y="2" width="9" height="9" rx="1.5" fill="#00A4EF"/>
+        <rect x="2" y="13" width="9" height="9" rx="1.5" fill="#00A4EF"/>
+        <rect x="13" y="13" width="9" height="9" rx="1.5" fill="#00A4EF"/>
+      </svg>
+    </button>
+
+    <!-- App Dock Icons -->
+    <div class="dock-apps">
+      <button class="taskbar-btn" onclick="launchApp('terminal')" title="Terminal Console">
+        <span class="icon">💻</span>
+      </button>
+      <button class="taskbar-btn" onclick="launchApp('explorer')" title="File Explorer">
+        <span class="icon">📁</span>
+      </button>
+      <button class="taskbar-btn" onclick="launchApp('firewall')" title="Security & Firewall">
+        <span class="icon">🛡️</span>
+      </button>
+      <button class="taskbar-btn" onclick="launchApp('taskmgr')" title="Task Manager">
+        <span class="icon">📊</span>
+      </button>
+    </div>
+
+    <!-- System Tray & Clock -->
+    <div class="system-tray">
+      <div class="tray-icons">
+        <span title="Network Connected">📶</span>
+        <span title="Audio Output">🔊</span>
+        <span title="Battery 100%">🔋</span>
+      </div>
+      <div id="tray-clock" class="clock-display" onclick="togglePowerMenu()">
+        <span id="time-text">12:00 PM</span>
+        <span id="date-text">2026-09-14</span>
+      </div>
+    </div>
+
+  </footer>
+
+  <!-- Start Menu Flyout -->
+  <div id="start-menu" class="start-menu-flyout glass-panel hidden">
+    <div class="start-header">
+      <input type="text" class="start-search" placeholder="Type here to search apps and files...">
+    </div>
+    <div class="start-section-title">Pinned Applications</div>
+    <div class="start-grid">
+      <div class="start-item" onclick="launchApp('terminal')">
+        <div class="start-icon-box">💻</div>
+        <span>Terminal</span>
+      </div>
+      <div class="start-item" onclick="launchApp('explorer')">
+        <div class="start-icon-box">📁</div>
+        <span>Files</span>
+      </div>
+      <div class="start-item" onclick="launchApp('firewall')">
+        <div class="start-icon-box">🛡️</div>
+        <span>Security</span>
+      </div>
+      <div class="start-item" onclick="launchApp('taskmgr')">
+        <div class="start-icon-box">📊</div>
+        <span>Monitor</span>
+      </div>
+    </div>
+
+    <!-- Power & User Footer -->
+    <div class="start-footer">
+      <div class="user-profile">
+        <div class="avatar">A</div>
+        <span>Administrator</span>
+      </div>
+      <div class="power-buttons">
+        <button class="power-btn" onclick="systemPower('restart')" title="Reboot OS">🔄</button>
+        <button class="power-btn danger" onclick="systemPower('shutdown')" title="Power Off OS">⏻</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Custom Right-Click Context Menu -->
+  <div id="context-menu" class="context-menu glass-panel hidden">
+    <div class="menu-item" onclick="location.reload()">🔄 Refresh Desktop</div>
+    <div class="menu-item" onclick="launchApp('terminal')">💻 Open Terminal</div>
+    <div class="menu-item" onclick="launchApp('explorer')">📁 Open Files</div>
+    <hr class="menu-divider">
+    <div class="menu-item danger" onclick="systemPower('restart')">🔄 Restart System</div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

@@ -1,0 +1,19 @@
+[Unit]
+Description=Xenithra OS Fullscreen Stealth Kiosk Shell & Local Service
+After=network.target sound.target graphical.target
+Wants=graphical.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/xenithra
+Environment="DISPLAY=:0"
+Environment="XAUTHORITY=/root/.Xauthority"
+ExecStart=/opt/xenithra/services/kiosk/init_override.sh aspnet
+Restart=always
+RestartSec=2
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=graphical.target
