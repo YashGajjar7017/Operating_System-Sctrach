@@ -1,0 +1,12 @@
+namespace ModernShell
+{
+    [default_interface]
+    runtimeclass NativeBridge
+    {
+        NativeBridge();
+        void LaunchProcess(String executablePath);
+        void MinimizeWindow();
+        void CloseShell();
+        String GetSystemTelemetry();
+    }
+}

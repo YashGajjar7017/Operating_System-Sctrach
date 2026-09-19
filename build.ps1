@@ -135,45 +135,60 @@ Write-Host "[+] BOOTX64.EFI built successfully." -ForegroundColor Green
 
 # 2. Assemble and Compile Kernel
 Write-Host "`n[2/4] Assembling & Compiling Kernel with Security Subsystems (kernel.elf)..." -ForegroundColor White
-$KernelEntryAsm  = Join-Path $KernDir "arch\x86_64\entry.asm"
-$KernelSwitchAsm = Join-Path $KernDir "arch\x86_64\switch.asm"
-$KernelEntryObj  = Join-Path $BuildDir "kern_entry.o"
-$KernelSwitchObj = Join-Path $BuildDir "sched_switch.o"
-$KernelElf       = Join-Path $BuildDir "kernel.elf"
-$LinkerScript    = Join-Path $KernDir "linker.ld"
+$KernelEntryAsm   = Join-Path $KernDir "arch\x86_64\entry.asm"
+$KernelSwitchAsm  = Join-Path $KernDir "arch\x86_64\switch.asm"
+$KernelGdtIdtAsm  = Join-Path $KernDir "arch\x86_64\gdt_idt.asm"
+$KernelApTrampAsm = Join-Path $KernDir "arch\x86_64\ap_trampoline.asm"
+
+$KernelEntryObj   = Join-Path $BuildDir "kern_entry.o"
+$KernelSwitchObj  = Join-Path $BuildDir "sched_switch.o"
+$KernelGdtIdtObj  = Join-Path $BuildDir "kern_gdt_idt_asm.o"
+$KernelApTrampObj = Join-Path $BuildDir "kern_ap_trampoline.o"
+$KernelElf        = Join-Path $BuildDir "kernel.elf"
+$LinkerScript     = Join-Path $KernDir "linker.ld"
 
 $KernelSources = @(
-    @{ Src = (Join-Path $KernDir "main.c"); Obj = (Join-Path $BuildDir "kern_main.o") },
-    @{ Src = (Join-Path $KernDir "drivers\ps2.c"); Obj = (Join-Path $BuildDir "kern_ps2.o") },
-    @{ Src = (Join-Path $KernDir "drivers\sound.c"); Obj = (Join-Path $BuildDir "kern_sound.o") },
-    @{ Src = (Join-Path $KernDir "sched\sched.c"); Obj = (Join-Path $BuildDir "kern_sched.o") },
-    @{ Src = (Join-Path $KernDir "security\session.c"); Obj = (Join-Path $BuildDir "kern_session.o") },
-    @{ Src = (Join-Path $KernDir "security\firewall.c"); Obj = (Join-Path $BuildDir "kern_firewall.o") },
-    @{ Src = (Join-Path $KernDir "gui\compositor.c"); Obj = (Join-Path $BuildDir "kern_compositor.o") },
-    @{ Src = (Join-Path $KernDir "gui\anim.c"); Obj = (Join-Path $BuildDir "kern_anim.o") },
-    @{ Src = (Join-Path $KernDir "gui\dom_engine.c"); Obj = (Join-Path $BuildDir "kern_dom.o") },
-    @{ Src = (Join-Path $KernDir "gui\v8_engine.c"); Obj = (Join-Path $BuildDir "kern_v8.o") },
-    @{ Src = (Join-Path $KernDir "python\py_runtime.c"); Obj = (Join-Path $BuildDir "kern_py_runtime.o") },
-    @{ Src = (Join-Path $KernDir "apps\browser_app.c"); Obj = (Join-Path $BuildDir "kern_app_browser.o") },
-    @{ Src = (Join-Path $KernDir "apps\explorer_app.c"); Obj = (Join-Path $BuildDir "kern_app_explorer.o") },
-    @{ Src = (Join-Path $KernDir "apps\taskmgr_app.c"); Obj = (Join-Path $BuildDir "kern_app_taskmgr.o") },
-    @{ Src = (Join-Path $KernDir "apps\firewall_app.c"); Obj = (Join-Path $BuildDir "kern_app_firewall.o") },
-    @{ Src = (Join-Path $KernDir "apps\terminal_app.c"); Obj = (Join-Path $BuildDir "kern_app_terminal.o") },
-    @{ Src = (Join-Path $KernDir "apps\vlc_app.c"); Obj = (Join-Path $BuildDir "kern_app_vlc.o") },
+    @{ Src = (Join-Path $KernDir "arch\x86_64\gdt_idt.c"); Obj = (Join-Path $BuildDir "kern_gdt_idt.o") },
+    @{ Src = (Join-Path $KernDir "arch\x86_64\apic.c");    Obj = (Join-Path $BuildDir "kern_apic.o") },
+    @{ Src = (Join-Path $KernDir "mm\vmm.c");             Obj = (Join-Path $BuildDir "kern_vmm.o") },
+    @{ Src = (Join-Path $KernDir "mm\heap.c");            Obj = (Join-Path $BuildDir "kern_heap.o") },
+    @{ Src = (Join-Path $KernDir "exec\kpcr.c");          Obj = (Join-Path $BuildDir "kern_kpcr.o") },
+    @{ Src = (Join-Path $KernDir "exec\smss.c");          Obj = (Join-Path $BuildDir "kern_smss.o") },
+    @{ Src = (Join-Path $KernDir "main.c");               Obj = (Join-Path $BuildDir "kern_main.o") },
+    @{ Src = (Join-Path $KernDir "drivers\ps2.c");        Obj = (Join-Path $BuildDir "kern_ps2.o") },
+    @{ Src = (Join-Path $KernDir "drivers\sound.c");      Obj = (Join-Path $BuildDir "kern_sound.o") },
+    @{ Src = (Join-Path $KernDir "sched\sched.c");        Obj = (Join-Path $BuildDir "kern_sched.o") },
+    @{ Src = (Join-Path $KernDir "security\session.c");   Obj = (Join-Path $BuildDir "kern_session.o") },
+    @{ Src = (Join-Path $KernDir "security\firewall.c");  Obj = (Join-Path $BuildDir "kern_firewall.o") },
+    @{ Src = (Join-Path $KernDir "gui\compositor.c");     Obj = (Join-Path $BuildDir "kern_compositor.o") },
+    @{ Src = (Join-Path $KernDir "gui\anim.c");           Obj = (Join-Path $BuildDir "kern_anim.o") },
+    @{ Src = (Join-Path $KernDir "gui\dom_engine.c");     Obj = (Join-Path $BuildDir "kern_dom.o") },
+    @{ Src = (Join-Path $KernDir "gui\v8_engine.c");      Obj = (Join-Path $BuildDir "kern_v8.o") },
+    @{ Src = (Join-Path $KernDir "python\py_runtime.c");  Obj = (Join-Path $BuildDir "kern_py_runtime.o") },
+    @{ Src = (Join-Path $KernDir "apps\browser_app.c");   Obj = (Join-Path $BuildDir "kern_app_browser.o") },
+    @{ Src = (Join-Path $KernDir "apps\explorer_app.c");  Obj = (Join-Path $BuildDir "kern_app_explorer.o") },
+    @{ Src = (Join-Path $KernDir "apps\taskmgr_app.c");   Obj = (Join-Path $BuildDir "kern_app_taskmgr.o") },
+    @{ Src = (Join-Path $KernDir "apps\firewall_app.c");  Obj = (Join-Path $BuildDir "kern_app_firewall.o") },
+    @{ Src = (Join-Path $KernDir "apps\terminal_app.c");  Obj = (Join-Path $BuildDir "kern_app_terminal.o") },
+    @{ Src = (Join-Path $KernDir "apps\vlc_app.c");       Obj = (Join-Path $BuildDir "kern_app_vlc.o") },
     @{ Src = (Join-Path $KernDir "apps\installer_app.c"); Obj = (Join-Path $BuildDir "kern_app_installer.o") },
     @{ Src = (Join-Path $KernDir "apps\diskclone_app.c"); Obj = (Join-Path $BuildDir "kern_app_diskclone.o") },
-    @{ Src = (Join-Path $KernDir "kstring.c"); Obj = (Join-Path $BuildDir "kern_string.o") },
-    @{ Src = (Join-Path $SharedDir "font.c"); Obj = (Join-Path $BuildDir "kern_font.o") }
+    @{ Src = (Join-Path $KernDir "kstring.c");            Obj = (Join-Path $BuildDir "kern_string.o") },
+    @{ Src = (Join-Path $SharedDir "font.c");             Obj = (Join-Path $BuildDir "kern_font.o") }
 )
 
 & nasm -f elf64 $KernelEntryAsm -o $KernelEntryObj
 & nasm -f elf64 $KernelSwitchAsm -o $KernelSwitchObj
+& nasm -f elf64 $KernelGdtIdtAsm -o $KernelGdtIdtObj
+& nasm -f elf64 $KernelApTrampAsm -o $KernelApTrampObj
 
-$ObjList = @($KernelEntryObj, $KernelSwitchObj)
+$ObjList = @($KernelEntryObj, $KernelSwitchObj, $KernelGdtIdtObj, $KernelApTrampObj)
 foreach ($item in $KernelSources) {
     & clang -target x86_64-unknown-none-elf -ffreestanding -mno-red-zone -mcmodel=kernel -I$SharedDir -I$KernDir -O2 -c $item.Src -o $item.Obj
     $ObjList += $item.Obj
 }
+
+if (Test-Path $KernelElf) { Remove-Item -Force $KernelElf }
 
 if ($Lld) {
     & ld.lld -m elf_x86_64 -T $LinkerScript -nostdlib $ObjList -o $KernelElf
@@ -181,7 +196,7 @@ if ($Lld) {
     & clang -target x86_64-unknown-none-elf -nostdlib "-Wl,-T,$LinkerScript" $ObjList -o $KernelElf
 }
 
-if (-not (Test-Path $KernelElf)) {
+if (($LASTEXITCODE -ne 0) -or (-not (Test-Path $KernelElf))) {
     Write-Host "[!] Error: Failed to link kernel.elf!" -ForegroundColor Red
     exit 1
 }

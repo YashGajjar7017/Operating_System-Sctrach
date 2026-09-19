@@ -20,15 +20,12 @@
 ;   0x702A : AP barrier counter (4 bytes) — BSP increments to signal ready
 ; =============================================================================
 
-; The trampoline MUST be assembled as a flat binary positioned at 0x8000
-; We use [ORG 0x8000] to get correct self-relative address calculations in 16-bit.
-[BITS 16]
-[ORG 0x8000]
-
 global ap_trampoline_start
 global ap_trampoline_end
-global ap_kernel_entry_c         ; Defined in kpcr.c / smss.c
 
+section .text
+
+[BITS 16]
 ap_trampoline_start:
 
 ; =============================================================================
@@ -37,7 +34,7 @@ ap_trampoline_start:
     cli                          ; Disable interrupts immediately
     cld                          ; Clear direction flag
 
-    ; Establish a real-mode data segment at CS (0x0800 after SIPI sets CS=0x0800)
+    ; Establish a real-mode data segment at CS
     xor ax, ax
     mov ds, ax
     mov es, ax
@@ -53,7 +50,7 @@ ap_trampoline_start:
     mov cr0, eax
 
     ; Far-jump to flush pipeline and reload CS with flat 32-bit code selector (0x08)
-    jmp dword 0x08:ap_32bit_entry
+    jmp dword 0x08:(0x8000 + (ap_32bit_entry - ap_trampoline_start))
 
 ; =============================================================================
 ; Stage 2: 32-bit Protected Mode — Enable Paging for Long Mode
@@ -92,7 +89,7 @@ ap_32bit_entry:
     mov cr0, eax
 
     ; Far-jump to flush pipeline and enter 64-bit mode with kernel CS (0x08)
-    jmp dword 0x08:ap_64bit_entry
+    jmp dword 0x08:(0x8000 + (ap_64bit_entry - ap_trampoline_start))
 
 ; =============================================================================
 ; Stage 3: 64-bit Long Mode — Call into C AP initialization
@@ -109,7 +106,6 @@ ap_64bit_entry:
     mov gs, ax
 
     ; Set up a minimal 64-bit stack (AP gets its own stack from kpcr_init)
-    ; For now use a temporary region in low memory
     mov rsp, 0x7BF0
 
     ; Clear the frame pointer to mark the bottom of the call stack for backtraces
@@ -124,7 +120,6 @@ ap_64bit_entry:
     call rax
 
 ap_hang:
-    ; AP should never fall through to here if ap_kernel_entry_c is correct
     cli
     hlt
     jmp ap_hang
@@ -133,11 +128,8 @@ ap_trampoline_end:
 
 ; =============================================================================
 ; Early AP GDT — lives at fixed physical address 0x7010
-; BSP copies this before sending SIPI.
-; This is a minimal flat GDT: Null, Kernel Code (32-bit), Kernel Data (32-bit)
-; The full 64-bit GDT is loaded later by kpcr_init() for each AP.
 ; =============================================================================
-section .ap_gdt_data follows=.text
+section .rodata
 align 8
 ap_early_gdt:
     ; Descriptor 0: Null
@@ -149,4 +141,4 @@ ap_early_gdt:
 
 ap_early_gdtr:
     dw 23           ; Limit = 3 entries × 8 bytes - 1
-    dq ap_early_gdt ; Base  = physical address (set by BSP memcpy to 0x7010/0x7020)
+    dq ap_early_gdt ; Base

@@ -34,6 +34,7 @@
 
 #include <stdint.h>
 #include <stddef.h>
+#include "../../shared/bootinfo.h"
 
 /* ---------------------------------------------------------------------------
  * Page Size Constants
@@ -131,7 +132,7 @@ extern uint64_t  *g_kernel_pml4;      /* Virtual address of the kernel PML4 */
  *        Must be called as part of Phase 0 kernel init, after GDT/IDT setup.
  * @param boot_info Pointer to the boot information block from the bootloader.
  */
-void pfn_database_init(const struct _XenithraBootInfo *boot_info);
+void pfn_database_init(const XenithraBootInfo *boot_info);
 
 /**
  * @brief Allocate a single 4KB physical page frame.
@@ -154,7 +155,7 @@ void vmm_free_physical(uint64_t phys_addr);
  *        Maps kernel pool region into the virtual address space.
  * @param boot_info Pointer to the boot information block.
  */
-void vmm_init(const struct _XenithraBootInfo *boot_info);
+void vmm_init(const XenithraBootInfo *boot_info);
 
 /**
  * @brief Map a single 4KB virtual page to a physical frame.

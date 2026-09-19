@@ -1,25 +1,48 @@
 const { app, BrowserWindow, ipcMain } = require('electron');
 const path = require('path');
-const dns = require('dns');
+const net = require('net');
 
+const PIPE_PATH = '\\\\.\\pipe\\CustomShellIPC';
 let mainWindow = null;
 
-function createWindow() {
+function sendPipeCommand(payload) {
+  return new Promise((resolve, reject) => {
+    const client = net.connect(PIPE_PATH, () => {
+      client.write(JSON.stringify(payload));
+    });
+
+    client.on('data', (data) => {
+      try {
+        const response = JSON.parse(data.toString());
+        resolve(response);
+      } catch (err) {
+        resolve({ status: 'error', message: err.message });
+      } finally {
+        client.end();
+      }
+    });
+
+    client.on('error', (err) => {
+      // Fallback response if named pipe is unavailable during isolated dev runs
+      resolve({ status: 'fallback', message: err.message, payload });
+    });
+  });
+}
+
+function createShellWindow() {
   mainWindow = new BrowserWindow({
     width: 1366,
     height: 768,
-    minWidth: 1024,
-    minHeight: 600,
-    frame: true,
+    frame: false,
+    fullscreen: false,
     title: 'Xenithra OS - Integrated Windows 11 Desktop Shell & Kernel Bridge',
-    backgroundColor: '#060B18',
+    backgroundColor: '#0f172a',
     webPreferences: {
-      nodeIntegration: true,
-      contextIsolation: false,
-      webviewTag: true,
-      webSecurity: false,
+      preload: path.join(__dirname, 'preload.cjs'),
+      nodeIntegration: false,
+      contextIsolation: true,
+      sandbox: false,
     },
-    autoHideMenuBar: true,
   });
 
   const isDev = process.env.NODE_ENV === 'development' || !app.isPackaged;
@@ -30,49 +53,19 @@ function createWindow() {
   } else {
     mainWindow.loadFile(path.join(__dirname, '../dist/index.html'));
   }
+
+  mainWindow.on('closed', () => {
+    mainWindow = null;
+  });
 }
 
-// IPC Handlers for Integrated Architecture Pipeline (Kernel -> OS -> Firewall/DNS -> V8 -> Shell)
-ipcMain.handle('dns-resolve', async (event, hostname) => {
-  return new Promise((resolve) => {
-    dns.lookup(hostname || 'www.google.com', (err, address, family) => {
-      if (err) {
-        resolve({ success: false, error: err.message, ip: '142.250.190.46' });
-      } else {
-        resolve({ success: true, ip: address, family });
-      }
-    });
-  });
-});
-
-ipcMain.handle('firewall-inspect', async (event, packet) => {
-  // Simulate Kernel NetFilter deep packet inspection
-  const isBlocked = packet.port === 22 || packet.port === 445;
-  return {
-    action: isBlocked ? 'DROP' : 'ALLOW',
-    ruleId: isBlocked ? 4 : 2,
-    timestamp: Date.now(),
-  };
-});
-
-ipcMain.handle('get-kernel-stats', async () => {
-  return {
-    smepEnabled: true,
-    smapEnabled: true,
-    sessionEntropy: '128-bit Active',
-    activeSessions: 3,
-    totalInspectedPackets: 48920,
-    v8HeapUsedMb: Math.floor(process.memoryUsage().heapUsed / (1024 * 1024)),
-    v8HeapTotalMb: Math.floor(process.memoryUsage().heapTotal / (1024 * 1024)),
-  };
-});
-
+// App lifecycle
 app.whenReady().then(() => {
-  createWindow();
+  createShellWindow();
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {
-      createWindow();
+      createShellWindow();
     }
   });
 });
@@ -80,5 +73,25 @@ app.whenReady().then(() => {
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {
     app.quit();
+  }
+});
+
+// IPC Main Handlers connecting Renderer to Native Pipe
+ipcMain.handle('shell:launch', async (event, appName) => {
+  try {
+    return await sendPipeCommand({ action: 'launch', target: appName });
+  } catch (err) {
+    return { status: 'error', message: err.message };
+  }
+});
+
+ipcMain.handle('shell:action', async (event, { type }) => {
+  try {
+    if (type === 'restore_explorer') {
+      return await sendPipeCommand({ action: 'restore_explorer' });
+    }
+    return await sendPipeCommand({ action: 'power', type });
+  } catch (err) {
+    return { status: 'error', message: err.message };
   }
 });
