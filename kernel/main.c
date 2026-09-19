@@ -14,6 +14,7 @@
 #include "gui/anim.h"
 #include "gui/compositor.h"
 #include "gui/v8_engine.h"
+#include "python/py_runtime.h"
 #include "apps/browser_app.h"
 #include "apps/explorer_app.h"
 #include "apps/taskmgr_app.h"
@@ -53,14 +54,15 @@ void kmain(XenithraBootInfo *boot_info) {
     /* 6. Initialize Kernel Private Firewall */
     firewall_init();
 
-    /* 7. Initialize Windows 11 Fluent Window Compositor & V8 JavaScript Bridge */
+    /* 7. Initialize Windows 11 Compositor & Python 3.12 LTS In-Memory Runtime */
     compositor_init(g_kernel_boot_info.framebuffer);
     v8_engine_init();
+    py_runtime_init();
 
-    /* 8. Launch Modern Microsoft Edge / Google React App at startup */
-    browser_app_launch();
+    /* 8. Kernel Syscall: Launch Fullscreen C Browser Directly into Django Backend */
+    sys_launch_django_kiosk();
 
-    /* 9. Render Initial Windows 11 Desktop State */
+    /* 9. Render Initial Desktop State */
     compositor_render();
 
     /* 10. High-Performance Hardware Event Pump & Scheduling Loop */
@@ -89,9 +91,10 @@ void kmain(XenithraBootInfo *boot_info) {
             }
         }
 
-        /* 10.3 Preemptive Sched, V8 Engine & Compositor 60 FPS Animation Ticks */
+        /* 10.3 Preemptive Sched, Python 3.12, V8 & Compositor Ticks */
         if ((loop_counter & 0x3FFF) == 0) {
             sched_tick();
+            py_runtime_tick();
             v8_engine_tick();
             session_guard_audit();
             compositor_tick();

@@ -153,6 +153,7 @@ $KernelSources = @(
     @{ Src = (Join-Path $KernDir "gui\anim.c"); Obj = (Join-Path $BuildDir "kern_anim.o") },
     @{ Src = (Join-Path $KernDir "gui\dom_engine.c"); Obj = (Join-Path $BuildDir "kern_dom.o") },
     @{ Src = (Join-Path $KernDir "gui\v8_engine.c"); Obj = (Join-Path $BuildDir "kern_v8.o") },
+    @{ Src = (Join-Path $KernDir "python\py_runtime.c"); Obj = (Join-Path $BuildDir "kern_py_runtime.o") },
     @{ Src = (Join-Path $KernDir "apps\browser_app.c"); Obj = (Join-Path $BuildDir "kern_app_browser.o") },
     @{ Src = (Join-Path $KernDir "apps\explorer_app.c"); Obj = (Join-Path $BuildDir "kern_app_explorer.o") },
     @{ Src = (Join-Path $KernDir "apps\taskmgr_app.c"); Obj = (Join-Path $BuildDir "kern_app_taskmgr.o") },
