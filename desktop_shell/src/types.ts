@@ -162,3 +162,89 @@ export interface V8Telemetry {
   ipcMessagesPerSec: number;
   gcPauseMs: number;
 }
+
+/* 8. Web3 / Blockchain Architecture Types */
+
+/** EIP-6963 Multi-Injected Provider Info */
+export interface Web3WalletInfo {
+  uuid: string;
+  name: string;
+  icon: string;          // data:image/svg+xml or data:image/png base64
+  rdns: string;          // Reverse-DNS identifier: 'io.metamask', 'app.rabby'
+  connected: boolean;
+  account: string | null;
+  chainId: number | null;
+}
+
+/** JSON-RPC 2.0 Request */
+export interface JsonRpcRequest {
+  jsonrpc: '2.0';
+  id: number;
+  method: string;
+  params: unknown[];
+}
+
+/** JSON-RPC 2.0 Response */
+export interface JsonRpcResponse<T> {
+  jsonrpc: '2.0';
+  id: number;
+  result?: T;
+  error?: {
+    code: number;
+    message: string;
+    data?: unknown;
+  };
+}
+
+/** EIP-1559 Transaction Type 2 Envelope */
+export interface EIP1559Transaction {
+  chainId: string;            // hex string: '0x1' = Ethereum mainnet
+  nonce: string;              // hex string
+  maxPriorityFeePerGas: string; // hex string (wei)
+  maxFeePerGas: string;       // hex string (wei)
+  gasLimit: string;           // hex string
+  to: string;                 // 0x-prefixed 20-byte address
+  value: string;              // hex string (wei)
+  data: string;               // 0x-prefixed hex calldata
+}
+
+/** EIP-712 Typed Structured Data */
+export interface EIP712TypedData {
+  types: Record<string, Array<{ name: string; type: string }>>;
+  primaryType: string;
+  domain: {
+    name: string;
+    version: string;
+    chainId: number;
+    verifyingContract: string;
+  };
+  message: Record<string, unknown>;
+}
+
+/** ENS Domain Record */
+export interface EnsRecord {
+  domain: string;        // e.g. 'vitalik.eth'
+  node: string;          // namehash bytes32 hex
+  resolverAddress: string;
+  contenthash: string;   // decoded URI: 'ipfs://Qm...' | 'ar://...'
+  rawContenthash: string; // raw hex from contract
+}
+
+/** IPFS Content Identifier */
+export interface IpfsCid {
+  cid: string;           // e.g. 'QmXoypiz...'
+  url: string;           // 'ipfs://...' or 'https://ipfs.io/ipfs/...'
+  gateway: string;       // Gateway used to fetch
+  size?: string;
+}
+
+/** Web3 RPC Call Log Entry */
+export interface RpcCallLog {
+  id: number;
+  method: string;
+  params: string;
+  result: string;
+  status: 'pending' | 'success' | 'error';
+  latencyMs: number;
+  timestamp: string;
+}

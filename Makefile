@@ -40,6 +40,14 @@ BOOT_OBJS = $(BUILD_DIR)/boot_main.o \
 
 KERN_OBJS = $(BUILD_DIR)/kern_entry.o \
             $(BUILD_DIR)/sched_switch.o \
+            $(BUILD_DIR)/kern_gdt_idt_asm.o \
+            $(BUILD_DIR)/kern_ap_trampoline.o \
+            $(BUILD_DIR)/kern_gdt_idt.o \
+            $(BUILD_DIR)/kern_apic.o \
+            $(BUILD_DIR)/kern_vmm.o \
+            $(BUILD_DIR)/kern_heap.o \
+            $(BUILD_DIR)/kern_kpcr.o \
+            $(BUILD_DIR)/kern_smss.o \
             $(BUILD_DIR)/kern_main.o \
             $(BUILD_DIR)/kern_ps2.o \
             $(BUILD_DIR)/kern_sound.o \
@@ -94,8 +102,34 @@ $(BUILD_DIR)/kern_entry.o: $(KERN_DIR)/arch/x86_64/entry.asm | $(BUILD_DIR)
 $(BUILD_DIR)/sched_switch.o: $(KERN_DIR)/arch/x86_64/switch.asm | $(BUILD_DIR)
 	$(AS) $(ASFLAGS) $< -o $@
 
+# New Phase 0/1 kernel subsystem objects
+$(BUILD_DIR)/kern_gdt_idt_asm.o: $(KERN_DIR)/arch/x86_64/gdt_idt.asm | $(BUILD_DIR)
+	$(AS) $(ASFLAGS) $< -o $@
+
+$(BUILD_DIR)/kern_ap_trampoline.o: $(KERN_DIR)/arch/x86_64/ap_trampoline.asm | $(BUILD_DIR)
+	$(AS) $(ASFLAGS) $< -o $@
+
+$(BUILD_DIR)/kern_gdt_idt.o: $(KERN_DIR)/arch/x86_64/gdt_idt.c | $(BUILD_DIR)
+	$(CC_KERN) $(TARGET_KERN) -I$(SHARED_DIR) -I$(KERN_DIR) -c $< -o $@
+
+$(BUILD_DIR)/kern_apic.o: $(KERN_DIR)/arch/x86_64/apic.c | $(BUILD_DIR)
+	$(CC_KERN) $(TARGET_KERN) -I$(SHARED_DIR) -I$(KERN_DIR) -c $< -o $@
+
+$(BUILD_DIR)/kern_vmm.o: $(KERN_DIR)/mm/vmm.c | $(BUILD_DIR)
+	$(CC_KERN) $(TARGET_KERN) -I$(SHARED_DIR) -I$(KERN_DIR) -c $< -o $@
+
+$(BUILD_DIR)/kern_heap.o: $(KERN_DIR)/mm/heap.c | $(BUILD_DIR)
+	$(CC_KERN) $(TARGET_KERN) -I$(SHARED_DIR) -I$(KERN_DIR) -c $< -o $@
+
+$(BUILD_DIR)/kern_kpcr.o: $(KERN_DIR)/exec/kpcr.c | $(BUILD_DIR)
+	$(CC_KERN) $(TARGET_KERN) -I$(SHARED_DIR) -I$(KERN_DIR) -c $< -o $@
+
+$(BUILD_DIR)/kern_smss.o: $(KERN_DIR)/exec/smss.c | $(BUILD_DIR)
+	$(CC_KERN) $(TARGET_KERN) -I$(SHARED_DIR) -I$(KERN_DIR) -c $< -o $@
+
 $(BUILD_DIR)/kern_main.o: $(KERN_DIR)/main.c | $(BUILD_DIR)
 	$(CC_KERN) $(TARGET_KERN) -I$(SHARED_DIR) -I$(KERN_DIR) -c $< -o $@
+
 
 $(BUILD_DIR)/kern_ps2.o: $(KERN_DIR)/drivers/ps2.c | $(BUILD_DIR)
 	$(CC_KERN) $(TARGET_KERN) -I$(SHARED_DIR) -I$(KERN_DIR) -c $< -o $@

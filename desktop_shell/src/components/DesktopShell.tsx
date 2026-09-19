@@ -16,6 +16,7 @@ import { EditorApp } from './EditorApp';
 import { CalculatorApp } from './CalculatorApp';
 import { StoreApp } from './StoreApp';
 import { PipelineInspectorApp } from './PipelineInspectorApp';
+import { Web3App } from './Web3App';
 import { WindowState } from '../types';
 
 export const DesktopShell: React.FC = () => {
@@ -141,6 +142,7 @@ export const DesktopShell: React.FC = () => {
       calc: { title: 'Calculator', icon: '🧮', w: 340, h: 460 },
       store: { title: 'Microsoft Store', icon: '📦', w: 820, h: 540 },
       terminal: { title: 'PowerShell / Kernel Terminal', icon: '⌨️', w: 720, h: 440 },
+      web3: { title: 'Web3 dApp Browser — JSON-RPC · EIP-6963 · ENS · IPFS', icon: '⛓️', w: 900, h: 600 },
     };
 
     const info = appTitles[tag] || { title: title || tag, icon: icon || '📄', w: 740, h: 480 };
@@ -675,6 +677,14 @@ export const DesktopShell: React.FC = () => {
                       </form>
                     </div>
                   )}
+
+                  {/* WEB3 dApp BROWSER */}
+                  {win.tag === 'web3' && (
+                    <div className="flex-1 h-full overflow-hidden">
+                      <Web3App />
+                    </div>
+                  )}
+
                 </div>
               </div>
             );
@@ -771,6 +781,7 @@ export const DesktopShell: React.FC = () => {
               { title: 'Terminal CLI', icon: '⌨️', tag: 'terminal' },
               { title: 'Sector Cloner', icon: '💽', tag: 'diskclone' },
               { title: 'Task Manager', icon: '📊', tag: 'taskmgr' },
+              { title: 'Web3 dApp', icon: '⛓️', tag: 'web3' },
             ]
               .filter((a) => !searchQuery || a.title.toLowerCase().includes(searchQuery.toLowerCase()))
               .map((app) => (
