@@ -1,6 +1,10 @@
 # -----------------------------------------------------------------------------
-# Xenithra OS - 64-bit Graphical Operating System Makefile
-# Architecture: x86_64 | Target: UEFI PE32+ Application & Higher-Half Kernel ELF
+# Xenithra OS v3.0 — Makefile
+# Architecture: x86_64 | UEFI PE32+ Bootloader + Higher-Half Kernel ELF
+# GUI: Node.js → Vite → Electron (replaces C compositor + Django)
+# RTOS: 6-priority scheduler + DPC queue + priority inheritance
+# Services: SysMain | DWM Proxy | MMCSS | AudioSrv | WMI
+# IPC: kernel Named Pipe → ipc_bridge.cjs → Electron React Shell
 # -----------------------------------------------------------------------------
 
 BUILD_DIR = build
@@ -48,17 +52,19 @@ KERN_OBJS = $(BUILD_DIR)/kern_entry.o \
             $(BUILD_DIR)/kern_heap.o \
             $(BUILD_DIR)/kern_kpcr.o \
             $(BUILD_DIR)/kern_smss.o \
+            $(BUILD_DIR)/kern_kshell.o \
             $(BUILD_DIR)/kern_main.o \
             $(BUILD_DIR)/kern_ps2.o \
             $(BUILD_DIR)/kern_sound.o \
             $(BUILD_DIR)/kern_sched.o \
             $(BUILD_DIR)/kern_session.o \
             $(BUILD_DIR)/kern_firewall.o \
-            $(BUILD_DIR)/kern_compositor.o \
-            $(BUILD_DIR)/kern_anim.o \
-            $(BUILD_DIR)/kern_dom.o \
-            $(BUILD_DIR)/kern_v8.o \
-            $(BUILD_DIR)/kern_py_runtime.o \
+            $(BUILD_DIR)/kern_gui_ipc.o \
+            $(BUILD_DIR)/svc_sysmain.o \
+            $(BUILD_DIR)/svc_mmcss.o \
+            $(BUILD_DIR)/svc_audiosrv.o \
+            $(BUILD_DIR)/svc_wmi.o \
+            $(BUILD_DIR)/svc_dwm_proxy.o \
             $(BUILD_DIR)/kern_app_browser.o \
             $(BUILD_DIR)/kern_app_explorer.o \
             $(BUILD_DIR)/kern_app_taskmgr.o \
@@ -70,7 +76,7 @@ KERN_OBJS = $(BUILD_DIR)/kern_entry.o \
             $(BUILD_DIR)/kern_string.o \
             $(BUILD_DIR)/kern_font.o
 
-.PHONY: all clean run run-iso setup_ovmf disk iso bootstrap
+.PHONY: all clean run run-iso setup_ovmf disk iso bootstrap shell shell-dev
 
 all: disk iso
 
@@ -146,15 +152,31 @@ $(BUILD_DIR)/kern_session.o: $(KERN_DIR)/security/session.c | $(BUILD_DIR)
 $(BUILD_DIR)/kern_firewall.o: $(KERN_DIR)/security/firewall.c | $(BUILD_DIR)
 	$(CC_KERN) $(TARGET_KERN) -I$(SHARED_DIR) -I$(KERN_DIR) -c $< -o $@
 
-$(BUILD_DIR)/kern_compositor.o: $(KERN_DIR)/gui/compositor.c | $(BUILD_DIR)
+# ── GUI IPC Server (replaces C compositor + Django) ─────────────────
+$(BUILD_DIR)/kern_gui_ipc.o: $(KERN_DIR)/gui/gui_ipc.c | $(BUILD_DIR)
 	$(CC_KERN) $(TARGET_KERN) -I$(SHARED_DIR) -I$(KERN_DIR) -c $< -o $@
 
-$(BUILD_DIR)/kern_anim.o: $(KERN_DIR)/gui/anim.c | $(BUILD_DIR)
+# ── Kernel Shell / GDB Stub ─────────────────────────────────────────
+$(BUILD_DIR)/kern_kshell.o: $(KERN_DIR)/exec/kshell.c | $(BUILD_DIR)
 	$(CC_KERN) $(TARGET_KERN) -I$(SHARED_DIR) -I$(KERN_DIR) -c $< -o $@
 
-$(BUILD_DIR)/kern_dom.o: $(KERN_DIR)/gui/dom_engine.c | $(BUILD_DIR)
-	$(CC_KERN) $(TARGET_KERN) -I$(SHARED_DIR) -I$(KERN_DIR) -c $< -o $@
+# ── System Services ─────────────────────────────────────────────────
+$(BUILD_DIR)/svc_sysmain.o: services/sysmain/sysmain.c | $(BUILD_DIR)
+	$(CC_KERN) $(TARGET_KERN) -I$(SHARED_DIR) -I$(KERN_DIR) -Iservices -c $< -o $@
 
+$(BUILD_DIR)/svc_mmcss.o: services/mmcss/mmcss.c | $(BUILD_DIR)
+	$(CC_KERN) $(TARGET_KERN) -I$(SHARED_DIR) -I$(KERN_DIR) -Iservices -c $< -o $@
+
+$(BUILD_DIR)/svc_audiosrv.o: services/audiosrv/audiosrv.c | $(BUILD_DIR)
+	$(CC_KERN) $(TARGET_KERN) -I$(SHARED_DIR) -I$(KERN_DIR) -Iservices -c $< -o $@
+
+$(BUILD_DIR)/svc_wmi.o: services/wmi/wmi.c | $(BUILD_DIR)
+	$(CC_KERN) $(TARGET_KERN) -I$(SHARED_DIR) -I$(KERN_DIR) -Iservices -c $< -o $@
+
+$(BUILD_DIR)/svc_dwm_proxy.o: services/dwm_proxy/dwm_proxy.c | $(BUILD_DIR)
+	$(CC_KERN) $(TARGET_KERN) -I$(SHARED_DIR) -I$(KERN_DIR) -Iservices -c $< -o $@
+
+# ── Kernel Apps (draw-stripped IPC providers) ────────────────────────
 $(BUILD_DIR)/kern_app_explorer.o: $(KERN_DIR)/apps/explorer_app.c | $(BUILD_DIR)
 	$(CC_KERN) $(TARGET_KERN) -I$(SHARED_DIR) -I$(KERN_DIR) -c $< -o $@
 
@@ -162,12 +184,6 @@ $(BUILD_DIR)/kern_app_taskmgr.o: $(KERN_DIR)/apps/taskmgr_app.c | $(BUILD_DIR)
 	$(CC_KERN) $(TARGET_KERN) -I$(SHARED_DIR) -I$(KERN_DIR) -c $< -o $@
 
 $(BUILD_DIR)/kern_app_firewall.o: $(KERN_DIR)/apps/firewall_app.c | $(BUILD_DIR)
-	$(CC_KERN) $(TARGET_KERN) -I$(SHARED_DIR) -I$(KERN_DIR) -c $< -o $@
-
-$(BUILD_DIR)/kern_v8.o: $(KERN_DIR)/gui/v8_engine.c | $(BUILD_DIR)
-	$(CC_KERN) $(TARGET_KERN) -I$(SHARED_DIR) -I$(KERN_DIR) -c $< -o $@
-
-$(BUILD_DIR)/kern_py_runtime.o: $(KERN_DIR)/python/py_runtime.c | $(BUILD_DIR)
 	$(CC_KERN) $(TARGET_KERN) -I$(SHARED_DIR) -I$(KERN_DIR) -c $< -o $@
 
 $(BUILD_DIR)/kern_app_browser.o: $(KERN_DIR)/apps/browser_app.c | $(BUILD_DIR)
@@ -213,21 +229,50 @@ bootstrap:
 setup_ovmf:
 	$(PYTHON) $(SCRIPTS_DIR)/download_ovmf.py
 
-# 8. Launch QEMU Emulator (Disk or CD-ROM ISO)
+# 8. Build Electron Desktop Shell (Node.js + Vite + React)
+shell:
+	cd desktop_shell && npm install && npm run build
+
+shell-dev:
+	cd desktop_shell && npm install && npm run dev &
+	cd desktop_shell && sleep 3 && npm start
+
+# 9. Launch QEMU Emulator
+#    COM1 (0x3F8) = GUI IPC pipe → virtio-serial forwarded to host
+#    COM2 (0x2F8) = GDB remote stub → TCP 1234
 run: disk setup_ovmf
 	$(QEMU) -bios $(OVMF) \
 		-drive format=raw,file=$(DISK_IMG) \
-		-m 2G \
-		-vga std \
-		-serial stdio \
-		-no-reboot
+		-m 4G \
+		-smp 4 \
+		-vga virtio \
+		-serial pipe:$(BUILD_DIR)/xenithra_gui_ipc \
+		-serial tcp::1234,server,nowait \
+		-device virtio-serial \
+		-chardev pipe,id=guipipe,path=$(BUILD_DIR)/xenithra_gui_ipc \
+		-device virtconsole,chardev=guipipe \
+		-no-reboot \
+		-enable-kvm
 
 run-iso: iso setup_ovmf
 	$(QEMU) -bios $(OVMF) \
 		-cdrom $(ISO_IMG) \
-		-m 2G \
-		-vga std \
+		-m 4G \
+		-smp 4 \
+		-vga virtio \
+		-serial pipe:$(BUILD_DIR)/xenithra_gui_ipc \
+		-serial tcp::1234,server,nowait \
+		-no-reboot
+
+run-debug: disk setup_ovmf
+	$(QEMU) -bios $(OVMF) \
+		-drive format=raw,file=$(DISK_IMG) \
+		-m 4G \
+		-smp 4 \
+		-vga virtio \
 		-serial stdio \
+		-serial tcp::1234,server,nowait \
+		-s -S \
 		-no-reboot
 
 clean:

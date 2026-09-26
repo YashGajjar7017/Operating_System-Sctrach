@@ -1,6 +1,6 @@
 /**
  * @file main.c
- * @brief Xenithra OS 64-bit Kernel Main Entry & Windows 11 Desktop Environment Boot
+ * @brief Xenithra OS 64-bit Kernel Main Entry & Modern Desktop Environment Boot
  *
  * Boot Phase Summary:
  *   Phase 0 (interrupts OFF, BSP only, IRQL=HIGH_LEVEL):
@@ -14,8 +14,23 @@
  *   Phase 1 (interrupts ON, SMP, IRQL=PASSIVE_LEVEL):
  *     apic_calibrate_timer() → TSC/APIC tick calibration
  *     apic_start_all_aps()   → INIT-SIPI-SIPI → APs enter Long Mode
- *     sched_init()           → MLFQ scheduler
+ *     sched_init()           → RTOS priority scheduler (6 levels)
  *     smss_master_init()     → Session 0 / Session 1 subsystem threads
+ *
+ *   Phase 2 (GUI Chain — Node.js → Vite/Electron):
+ *     gui_ipc_init()         → Named Pipe server for Electron IPC
+ *     kshell_init()          → GDB-capable kernel debug shell thread
+ *     smss registers:        → SysMain, DWM proxy, MMCSS, AudioSrv, WMI
+ *
+ * GUI Architecture (replaces legacy C compositor + Django):
+ *   kernel → gui_ipc Named Pipe → Node.js host → Electron → React TSX UI
+ *
+ * REMOVED (legacy):
+ *   - sys_launch_django_kiosk()  [Django backend — fully removed]
+ *   - compositor_render()        [C framebuffer drawing — replaced by Electron]
+ *   - v8_engine_init/tick()      [Fake V8 stub — replaced by real Node.js]
+ *   - py_runtime_init/tick()     [Python inline runtime stub]
+ *   - All kernel/gui draw primitives (gui_fill_rect, gui_draw_string, etc.)
  */
 
 #include <stdint.h>
@@ -30,16 +45,20 @@
 #include "exec/kpcr.h"
 #include "exec/smss.h"
 
-/* Phase 1: Existing Xenithra subsystems */
+/* Phase 1: Core Kernel Subsystems */
 #include "security/session.h"
 #include "security/firewall.h"
 #include "drivers/ps2.h"
 #include "drivers/sound.h"
 #include "sched/sched.h"
-#include "gui/anim.h"
-#include "gui/compositor.h"
-#include "gui/v8_engine.h"
-#include "python/py_runtime.h"
+
+/* Phase 2: New GUI IPC Layer (replaces C compositor) */
+#include "gui/gui_ipc.h"
+
+/* Kernel Shell (GDB-compatible debug shell) */
+#include "exec/kshell.h"
+
+/* Kernel-level syscall providers (draw-stripped, IPC-backed) */
 #include "apps/browser_app.h"
 #include "apps/explorer_app.h"
 #include "apps/taskmgr_app.h"
@@ -138,56 +157,77 @@ void kmain(XenithraBootInfo *boot_info) {
     }
 
     /* =========================================================
-     * EXISTING XENITHRA SUBSYSTEM INITIALIZATION
+     * PHASE 1B: CORE SUBSYSTEM INITIALIZATION
      * ========================================================= */
 
-    /* 2. Initialize Hardware Sound Driver & Synthesize Ambient Startup Chime */
+    /* 12. Initialize Hardware Sound Driver & Synthesize Ambient Startup Chime */
     sound_init();
     play_system_startup_chime();
 
-    /* 3. Initialize Preemptive Multilevel Feedback Queue (MLFQ) Scheduler */
+    /* 13. Initialize RTOS Priority Scheduler (6 priority levels + DPC queue) */
     sched_init();
 
-    /* 12. Session Manager Subsystem (SMSS) — Session 0 / Session 1 lifecycle.
+    /* 14. Session Manager Subsystem (SMSS) — Session 0 / Session 1 lifecycle.
      *     Creates kernel threads for: wininit, services, lsass (Session 0)
-     *     and csrss, winlogon, dwm, userinit, explorer (Session 1).
-     *     smss_master_init() runs as a kernel thread itself, does not block here. */
-    sched_create_kthread(smss_master_init, 1);
+     *     and csrss, winlogon, dwm_proxy, userinit (Session 1).
+     *     smss_master_init() runs as a kernel thread at RTOS_PRIO_HIGH. */
+    sched_create_kthread(smss_master_init, RTOS_PRIO_HIGH);
 
-    /* 4. Initialize Hardware PS/2 Mouse & Keyboard Drivers */
+    /* 15. Initialize Hardware PS/2 Mouse & Keyboard Drivers */
     uint32_t screen_w = g_kernel_boot_info.framebuffer.width ? g_kernel_boot_info.framebuffer.width : 1280;
     uint32_t screen_h = g_kernel_boot_info.framebuffer.height ? g_kernel_boot_info.framebuffer.height : 720;
     ps2_init(screen_w, screen_h);
 
-    /* 5. Initialize Kernel Security & Anti-Hijack Guard */
+    /* 16. Initialize Kernel Security & Anti-Hijack Guard */
     security_init();
     security_enable_smep_smap();
 
-    /* 6. Initialize Kernel Private Firewall */
+    /* 17. Initialize Kernel Private Firewall */
     firewall_init();
 
-    /* 7. Initialize Windows 11 Compositor & Python 3.12 LTS In-Memory Runtime */
-    compositor_init(g_kernel_boot_info.framebuffer);
-    v8_engine_init();
-    py_runtime_init();
+    /* =========================================================
+     * PHASE 2: NEW GUI CHAIN — Node.js → Vite/Electron Desktop
+     *
+     *  OLD (REMOVED):
+     *    compositor_init()       — C framebuffer compositor
+     *    v8_engine_init()        — Fake V8 stub
+     *    py_runtime_init()       — Python inline stub
+     *    sys_launch_django_kiosk() — Django kiosk (fully removed)
+     *    compositor_render()     — C framebuffer render
+     *
+     *  NEW CHAIN:
+     *    [1] gui_ipc_init()      — Opens Named Pipe "\\\\.\\pipe\\XenithraGUI"
+     *    [2] kshell_init()       — GDB-capable kernel shell thread (RTOS_PRIO_REALTIME)
+     *    [3] kshell spawns Node  — Node.js host reads pipe events
+     *    [4] Node starts Electron — Electron renders Win11 React UI
+     *    [5] Electron → IPC     — Shell commands route back to kernel syscalls
+     * ========================================================= */
 
-    /* 8. Kernel Syscall: Launch Fullscreen C Browser Directly into Django Backend */
-    sys_launch_django_kiosk();
+    /* Phase 2.1: Open kernel-side Named Pipe server for Electron IPC */
+    gui_ipc_init();
 
-    /* 9. Render Initial Desktop State */
-    compositor_render();
+    /* Phase 2.2: Spawn kernel debug shell (GDB-compatible, REALTIME priority).
+     *            kshell_init() also spawns Node.js → Electron boot chain. */
+    sched_create_kthread(kshell_init, RTOS_PRIO_REALTIME);
 
-    /* 10. High-Performance Hardware Event Pump & Scheduling Loop */
+    /* =========================================================
+     * PHASE 3: HIGH-PERFORMANCE EVENT PUMP (IPC-routed)
+     *
+     *  PS/2 mouse & keyboard events are no longer drawn to the C
+     *  framebuffer.  They are forwarded to the GUI IPC pipe so that
+     *  Electron / the React desktop shell can handle them natively.
+     * ========================================================= */
+
     PS2MouseState mouse_state;
-    PS2KeyEvent key_event;
-    uint64_t loop_counter = 0;
+    PS2KeyEvent   key_event;
+    uint64_t      loop_counter = 0;
 
     while (1) {
         loop_counter++;
 
-        /* 10.1 Poll PS/2 Mouse Hardware */
+        /* 3.1 Poll PS/2 Mouse Hardware → route to GUI IPC (not compositor) */
         if (ps2_poll_mouse(&mouse_state)) {
-            compositor_update_mouse(
+            gui_ipc_send_mouse_event(
                 mouse_state.x,
                 mouse_state.y,
                 mouse_state.left_button,
@@ -196,21 +236,18 @@ void kmain(XenithraBootInfo *boot_info) {
             );
         }
 
-        /* 10.2 Poll PS/2 Keyboard Hardware */
+        /* 3.2 Poll PS/2 Keyboard Hardware → route to GUI IPC */
         if (ps2_poll_keyboard(&key_event)) {
             if (key_event.is_pressed && (key_event.ascii || key_event.scancode)) {
-                compositor_dispatch_key(key_event.ascii, key_event.scancode, key_event.is_pressed);
+                gui_ipc_send_key_event(key_event.ascii, key_event.scancode, key_event.is_pressed);
             }
         }
 
-        /* 10.3 Preemptive Sched, Python 3.12, V8 & Compositor Ticks */
+        /* 3.3 RTOS scheduler tick + session audit + IPC pipe flush */
         if ((loop_counter & 0x3FFF) == 0) {
             sched_tick();
-            py_runtime_tick();
-            v8_engine_tick();
             session_guard_audit();
-            compositor_tick();
-            compositor_render();
+            gui_ipc_tick();   /* flush pending IPC messages to Electron */
         }
     }
 }
