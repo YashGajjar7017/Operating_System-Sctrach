@@ -24,4 +24,16 @@ char  *strcat(char *dest, const char *src);
 void uint_to_str(uint64_t val, char *buf);
 void int_to_str(int64_t val, char *buf);
 
+/* Kernel string & memory function aliases */
+#define kmemset   memset
+#define kmemcpy   memcpy
+#define kmemmove  memmove
+#define kmemcmp   memcmp
+#define kstrlen   strlen
+#define kstrcmp   strcmp
+#define kstrncmp  strncmp
+#define kstrcpy   strcpy
+#define kstrncpy  strncpy
+#define kstrcat   strcat
+
 #endif /* _KERNEL_KSTRING_H_ */

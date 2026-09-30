@@ -95,7 +95,7 @@ static void ipc_ring_push(const char *json, uint32_t len) {
         g_ring_head = (g_ring_head + 1) % IPC_RING_SIZE;
     }
     uint32_t copy_len = len < GUI_IPC_MAX_MSG_LEN - 2 ? len : GUI_IPC_MAX_MSG_LEN - 2;
-    kmemcpy(g_ring[g_ring_tail].msg, json, copy_len);
+    memcpy(g_ring[g_ring_tail].msg, json, copy_len);
     g_ring[g_ring_tail].msg[copy_len]     = '\n';
     g_ring[g_ring_tail].msg[copy_len + 1] = '\0';
     g_ring[g_ring_tail].len = copy_len + 1;

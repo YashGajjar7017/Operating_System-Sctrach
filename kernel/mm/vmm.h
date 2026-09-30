@@ -146,6 +146,14 @@ uint64_t vmm_alloc_physical(void);
  */
 void vmm_free_physical(uint64_t phys_addr);
 
+static inline uint64_t vmm_get_total_kb(void) {
+    return g_pfn_total_bytes / 1024;
+}
+
+static inline uint64_t vmm_get_free_kb(void) {
+    return (g_pfn_free_count * PAGE_SIZE_4K) / 1024;
+}
+
 /* ---------------------------------------------------------------------------
  * Virtual Memory Mapping API
  * --------------------------------------------------------------------------- */

@@ -22,9 +22,10 @@ $BuildDir  = Join-Path $RootDir "build"
 $BootDir   = Join-Path $RootDir "bootloader"
 $KernDir   = Join-Path $RootDir "kernel"
 $SharedDir = Join-Path $RootDir "shared"
-$ScriptDir = Join-Path $RootDir "scripts"
-$ToolsDir  = Join-Path $RootDir "tools"
-$VmDir     = Join-Path $RootDir "vm"
+$ScriptDir   = Join-Path $RootDir "scripts"
+$ToolsDir    = Join-Path $RootDir "tools"
+$VmDir       = Join-Path $RootDir "vm"
+$ServicesDir = Join-Path $RootDir "services"
 
 # Add portable tools/ directory to PATH if present
 $LlvmBin = Join-Path $ToolsDir "llvm-mingw\bin"
@@ -154,6 +155,7 @@ $KernelSources = @(
     @{ Src = (Join-Path $KernDir "mm\heap.c");            Obj = (Join-Path $BuildDir "kern_heap.o") },
     @{ Src = (Join-Path $KernDir "exec\kpcr.c");          Obj = (Join-Path $BuildDir "kern_kpcr.o") },
     @{ Src = (Join-Path $KernDir "exec\smss.c");          Obj = (Join-Path $BuildDir "kern_smss.o") },
+    @{ Src = (Join-Path $KernDir "exec\kshell.c");        Obj = (Join-Path $BuildDir "kern_kshell.o") },
     @{ Src = (Join-Path $KernDir "main.c");               Obj = (Join-Path $BuildDir "kern_main.o") },
     @{ Src = (Join-Path $KernDir "drivers\ps2.c");        Obj = (Join-Path $BuildDir "kern_ps2.o") },
     @{ Src = (Join-Path $KernDir "drivers\sound.c");      Obj = (Join-Path $BuildDir "kern_sound.o") },
@@ -165,6 +167,12 @@ $KernelSources = @(
     @{ Src = (Join-Path $KernDir "gui\dom_engine.c");     Obj = (Join-Path $BuildDir "kern_dom.o") },
     @{ Src = (Join-Path $KernDir "gui\v8_engine.c");      Obj = (Join-Path $BuildDir "kern_v8.o") },
     @{ Src = (Join-Path $KernDir "python\py_runtime.c");  Obj = (Join-Path $BuildDir "kern_py_runtime.o") },
+    @{ Src = (Join-Path $KernDir "gui\gui_ipc.c");        Obj = (Join-Path $BuildDir "kern_gui_ipc.o") },
+    @{ Src = (Join-Path $ServicesDir "sysmain\sysmain.c");     Obj = (Join-Path $BuildDir "svc_sysmain.o") },
+    @{ Src = (Join-Path $ServicesDir "mmcss\mmcss.c");         Obj = (Join-Path $BuildDir "svc_mmcss.o") },
+    @{ Src = (Join-Path $ServicesDir "audiosrv\audiosrv.c");   Obj = (Join-Path $BuildDir "svc_audiosrv.o") },
+    @{ Src = (Join-Path $ServicesDir "wmi\wmi.c");             Obj = (Join-Path $BuildDir "svc_wmi.o") },
+    @{ Src = (Join-Path $ServicesDir "dwm_proxy\dwm_proxy.c"); Obj = (Join-Path $BuildDir "svc_dwm_proxy.o") },
     @{ Src = (Join-Path $KernDir "apps\browser_app.c");   Obj = (Join-Path $BuildDir "kern_app_browser.o") },
     @{ Src = (Join-Path $KernDir "apps\explorer_app.c");  Obj = (Join-Path $BuildDir "kern_app_explorer.o") },
     @{ Src = (Join-Path $KernDir "apps\taskmgr_app.c");   Obj = (Join-Path $BuildDir "kern_app_taskmgr.o") },
@@ -184,7 +192,7 @@ $KernelSources = @(
 
 $ObjList = @($KernelEntryObj, $KernelSwitchObj, $KernelGdtIdtObj, $KernelApTrampObj)
 foreach ($item in $KernelSources) {
-    & clang -target x86_64-unknown-none-elf -ffreestanding -mno-red-zone -mcmodel=kernel -I$SharedDir -I$KernDir -O2 -c $item.Src -o $item.Obj
+    & clang -target x86_64-unknown-none-elf -ffreestanding -mno-red-zone -mcmodel=kernel -I$SharedDir -I$KernDir -I$ServicesDir -O2 -c $item.Src -o $item.Obj
     $ObjList += $item.Obj
 }
 

@@ -51,8 +51,12 @@
 #include "drivers/ps2.h"
 #include "drivers/sound.h"
 #include "sched/sched.h"
+#include "gui/anim.h"
+#include "gui/compositor.h"
+#include "gui/v8_engine.h"
+#include "python/py_runtime.h"
 
-/* Phase 2: New GUI IPC Layer (replaces C compositor) */
+/* Phase 2: New GUI IPC Layer */
 #include "gui/gui_ipc.h"
 
 /* Kernel Shell (GDB-compatible debug shell) */
@@ -186,36 +190,28 @@ void kmain(XenithraBootInfo *boot_info) {
     firewall_init();
 
     /* =========================================================
-     * PHASE 2: NEW GUI CHAIN — Node.js → Vite/Electron Desktop
-     *
-     *  OLD (REMOVED):
-     *    compositor_init()       — C framebuffer compositor
-     *    v8_engine_init()        — Fake V8 stub
-     *    py_runtime_init()       — Python inline stub
-     *    sys_launch_django_kiosk() — Django kiosk (fully removed)
-     *    compositor_render()     — C framebuffer render
-     *
-     *  NEW CHAIN:
-     *    [1] gui_ipc_init()      — Opens Named Pipe "\\\\.\\pipe\\XenithraGUI"
-     *    [2] kshell_init()       — GDB-capable kernel shell thread (RTOS_PRIO_REALTIME)
-     *    [3] kshell spawns Node  — Node.js host reads pipe events
-     *    [4] Node starts Electron — Electron renders Win11 React UI
-     *    [5] Electron → IPC     — Shell commands route back to kernel syscalls
+     * PHASE 2: GRAPHICAL COMPOSITOR & IPC SUBSYSTEMS
      * ========================================================= */
 
-    /* Phase 2.1: Open kernel-side Named Pipe server for Electron IPC */
+    /* 18. Initialize Windows 11 Fluent Compositor & Framebuffer */
+    compositor_init(g_kernel_boot_info.framebuffer);
+    v8_engine_init();
+    py_runtime_init();
+
+    /* 19. Launch Desktop Kiosk / Main Browser Shell */
+    sys_launch_django_kiosk();
+
+    /* 20. Render Initial Desktop State onto GOP Framebuffer */
+    compositor_render();
+
+    /* 21. Open kernel-side Named Pipe server for IPC */
     gui_ipc_init();
 
-    /* Phase 2.2: Spawn kernel debug shell (GDB-compatible, REALTIME priority).
-     *            kshell_init() also spawns Node.js → Electron boot chain. */
+    /* 22. Spawn kernel debug shell (GDB-compatible, REALTIME priority) */
     sched_create_kthread(kshell_init, RTOS_PRIO_REALTIME);
 
     /* =========================================================
-     * PHASE 3: HIGH-PERFORMANCE EVENT PUMP (IPC-routed)
-     *
-     *  PS/2 mouse & keyboard events are no longer drawn to the C
-     *  framebuffer.  They are forwarded to the GUI IPC pipe so that
-     *  Electron / the React desktop shell can handle them natively.
+     * PHASE 3: HIGH-PERFORMANCE EVENT PUMP & COMPOSITING LOOP
      * ========================================================= */
 
     PS2MouseState mouse_state;
@@ -225,8 +221,15 @@ void kmain(XenithraBootInfo *boot_info) {
     while (1) {
         loop_counter++;
 
-        /* 3.1 Poll PS/2 Mouse Hardware → route to GUI IPC (not compositor) */
+        /* 3.1 Poll PS/2 Mouse Hardware → route to Compositor & IPC */
         if (ps2_poll_mouse(&mouse_state)) {
+            compositor_update_mouse(
+                mouse_state.x,
+                mouse_state.y,
+                mouse_state.left_button,
+                mouse_state.right_button,
+                mouse_state.middle_button
+            );
             gui_ipc_send_mouse_event(
                 mouse_state.x,
                 mouse_state.y,
@@ -236,18 +239,23 @@ void kmain(XenithraBootInfo *boot_info) {
             );
         }
 
-        /* 3.2 Poll PS/2 Keyboard Hardware → route to GUI IPC */
+        /* 3.2 Poll PS/2 Keyboard Hardware → route to Compositor & IPC */
         if (ps2_poll_keyboard(&key_event)) {
             if (key_event.is_pressed && (key_event.ascii || key_event.scancode)) {
+                compositor_dispatch_key(key_event.ascii, key_event.scancode, key_event.is_pressed);
                 gui_ipc_send_key_event(key_event.ascii, key_event.scancode, key_event.is_pressed);
             }
         }
 
-        /* 3.3 RTOS scheduler tick + session audit + IPC pipe flush */
+        /* 3.3 Periodic RTOS tick, engine ticks, and Compositor Frame Render */
         if ((loop_counter & 0x3FFF) == 0) {
             sched_tick();
+            py_runtime_tick();
+            v8_engine_tick();
             session_guard_audit();
-            gui_ipc_tick();   /* flush pending IPC messages to Electron */
+            compositor_tick();
+            compositor_render();
+            gui_ipc_tick();
         }
     }
 }

@@ -23,13 +23,6 @@
 #define MMCSS_TICK_INTERVAL_MS 1      /* MMCSS runs every 1ms */
 #define MMCSS_REPORT_INTERVAL  100    /* report IPC every 100 ticks */
 
-typedef enum {
-    MMCSS_CLASS_AUDIO     = 0,
-    MMCSS_CLASS_VIDEO     = 1,
-    MMCSS_CLASS_CAPTURE   = 2,
-    MMCSS_CLASS_PLAYBACK  = 3,
-} MmcssClass;
-
 typedef struct {
     char         name[32];
     Thread      *thread;

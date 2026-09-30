@@ -96,20 +96,24 @@ typedef struct __attribute__((packed)) {
 /* ------------------------------------------------------------------ */
 
 typedef struct Thread {
-    /* Identity */
-    uint32_t           tid;
-    uint32_t           pid;
+    /* Identity & Scheduling header (exactly 32 bytes) */
+    uint32_t           tid;               /* Offset 0 */
+    uint32_t           pid;               /* Offset 4 */
+    ThreadState        state;             /* Offset 8 */
+    RTOSPriority       priority;          /* Offset 12 */
+    RTOSPriority       base_priority;     /* Offset 16 */
+    uint32_t           time_slice_left;   /* Offset 20 */
+    uint32_t           quantum;           /* Offset 24 */
+    uint32_t           _pad0;             /* Offset 28 (aligns rsp to offset 32) */
+
+    /* Hardware context (Offsets 32, 40, 48 — MUST match switch.asm) */
+    uint64_t           rsp;               /* Offset 32 (0x20) */
+    uint64_t           cr3;               /* Offset 40 (0x28) */
+    uint8_t            fpu_state[FPU_STATE_SIZE] __attribute__((aligned(16))); /* Offset 48 (0x30, 16-byte aligned) */
+
+    /* Identity string & RTOS scheduling state */
     char               name[32];
-
-    /* Scheduling state */
-    ThreadState        state;
-    RTOSPriority       priority;          /* Current effective priority */
-    RTOSPriority       base_priority;     /* Original priority (before inheritance) */
-    uint32_t           time_slice_left;   /* Remaining ticks in current quantum */
-    uint32_t           quantum;           /* Full quantum for this priority level */
     uint64_t           sleep_until;       /* Absolute tick count for wakeup */
-
-    /* Deadline scheduling (for MMCSS / RTOS_PRIO_REALTIME) */
     uint64_t           deadline_tick;     /* 0 = not using EDF */
     uint8_t            deadline_missed;   /* Set by watchdog if deadline overrun */
 
@@ -125,11 +129,6 @@ typedef struct Thread {
     uint64_t           total_cpu_ticks;   /* Cumulative ticks executed */
     uint64_t           last_run_tick;     /* When this thread last ran */
     uint32_t           cpu_us_last;       /* CPU µs in last reporting window */
-
-    /* Hardware context */
-    uint64_t           rsp;              /* Preserved kernel stack pointer */
-    uint64_t           cr3;             /* PML4 page directory (0 = kernel) */
-    uint8_t            fpu_state[FPU_STATE_SIZE] __attribute__((aligned(16)));
 
     /* Kernel stack */
     uint8_t            stack[THREAD_STACK_SIZE] __attribute__((aligned(16)));

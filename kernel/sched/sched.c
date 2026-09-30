@@ -21,6 +21,10 @@
 
 extern void switch_to_thread(Thread *prev, Thread *next);
 
+_Static_assert(offsetof(Thread, rsp) == 32, "Thread.rsp offset must be 32 for switch.asm");
+_Static_assert(offsetof(Thread, cr3) == 40, "Thread.cr3 offset must be 40 for switch.asm");
+_Static_assert(offsetof(Thread, fpu_state) == 48, "Thread.fpu_state offset must be 48 for switch.asm");
+
 /* ------------------------------------------------------------------ */
 /* Globals                                                             */
 /* ------------------------------------------------------------------ */
@@ -173,7 +177,7 @@ Thread *sched_create_named_kthread(void (*entry_point)(void),
     if (!t) return NULL;
 
     /* Zero the TCB */
-    kmemset(t, 0, sizeof(Thread));
+    memset(t, 0, sizeof(Thread));
 
     t->tid             = g_next_tid++;
     t->pid             = 0;

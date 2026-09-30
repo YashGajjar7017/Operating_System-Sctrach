@@ -1,14 +1,5 @@
 import React, { useState, useEffect } from 'react';
 
-declare global {
-  interface Window {
-    shellAPI?: {
-      launchApp(target: string): Promise<any>;
-      systemAction(type: 'shutdown' | 'reboot' | 'restore_explorer'): Promise<any>;
-      onSystemMessage(callback: (msg: any) => void): void;
-    };
-  }
-}
 
 export const CustomShellHost: React.FC = () => {
   const [timeStr, setTimeStr] = useState<string>('');

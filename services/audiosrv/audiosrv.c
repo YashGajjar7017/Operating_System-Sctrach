@@ -25,14 +25,14 @@
 #define AUDIOSRV_TICK_MS        5      /* mix every 5ms */
 #define AUDIOSRV_REPORT_EVERY   20     /* IPC report every 20 ticks */
 
-typedef struct {
+struct AudioSession {
     char     app_tag[32];
     int16_t  buffer[AUDIOSRV_BUFFER_FRAMES * 2];  /* stereo interleaved */
     uint32_t frames_pending;
     uint32_t volume;      /* 0–100 */
     uint8_t  muted;
     uint8_t  active;
-} AudioSession;
+};
 
 static AudioSession g_sessions[AUDIOSRV_MAX_SESSIONS];
 static uint32_t     g_session_count   = 0;

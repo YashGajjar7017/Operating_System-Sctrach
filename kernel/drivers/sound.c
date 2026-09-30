@@ -76,3 +76,12 @@ void play_system_startup_chime(void) {
     }
     sound_stop();
 }
+
+void sound_write_pcm(const int16_t *buffer, uint32_t frames) {
+    (void)buffer;
+    (void)frames;
+}
+
+void sound_write_silence(uint32_t frames) {
+    (void)frames;
+}

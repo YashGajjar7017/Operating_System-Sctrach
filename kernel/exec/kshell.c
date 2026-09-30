@@ -39,7 +39,6 @@
 #define COM2_LSR_THRE  0x20  /* TX holding register empty */
 
 static uint8_t g_gui_ready    = 0;
-static uint64_t g_boot_time   = 0;
 
 /* ------------------------------------------------------------------ */
 /* COM2 UART helpers (GDB port)                                       */
@@ -184,9 +183,9 @@ static int gdb_handle_packet(const char *pkt) {
             break;
 
         case 'q':
-            if (kstrncmp(pkt + 1, "Supported", 9) == 0) {
+            if (strncmp(pkt + 1, "Supported", 9) == 0) {
                 gdb_send_packet("PacketSize=400;qXfer:features:read+");
-            } else if (kstrncmp(pkt + 1, "Attached", 8) == 0) {
+            } else if (strncmp(pkt + 1, "Attached", 8) == 0) {
                 gdb_send_packet("1"); /* attached to existing process */
             } else {
                 gdb_send_packet(""); /* unsupported query */
@@ -249,8 +248,6 @@ static void kshell_boot_electron(void) {
 /* ------------------------------------------------------------------ */
 
 void kshell_init(void) {
-    g_boot_time = sched_get_ticks();
-
     /* Initialize GDB debug UART (COM2) */
     com2_init();
     kshell_print("[kshell] Xenithra OS Kernel Shell v3.0 (GDB stub active on COM2)");

@@ -13,5 +13,7 @@ void sound_init(void);
 void sound_play_tone(uint32_t freq_hz, uint32_t duration_ms);
 void sound_stop(void);
 void play_system_startup_chime(void);
+void sound_write_pcm(const int16_t *buffer, uint32_t frames);
+void sound_write_silence(uint32_t frames);
 
 #endif /* _KERNEL_DRIVERS_SOUND_H_ */

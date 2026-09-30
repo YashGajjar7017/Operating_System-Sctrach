@@ -59,6 +59,11 @@ KERN_OBJS = $(BUILD_DIR)/kern_entry.o \
             $(BUILD_DIR)/kern_sched.o \
             $(BUILD_DIR)/kern_session.o \
             $(BUILD_DIR)/kern_firewall.o \
+            $(BUILD_DIR)/kern_compositor.o \
+            $(BUILD_DIR)/kern_anim.o \
+            $(BUILD_DIR)/kern_dom.o \
+            $(BUILD_DIR)/kern_v8.o \
+            $(BUILD_DIR)/kern_py_runtime.o \
             $(BUILD_DIR)/kern_gui_ipc.o \
             $(BUILD_DIR)/svc_sysmain.o \
             $(BUILD_DIR)/svc_mmcss.o \
@@ -150,6 +155,21 @@ $(BUILD_DIR)/kern_session.o: $(KERN_DIR)/security/session.c | $(BUILD_DIR)
 	$(CC_KERN) $(TARGET_KERN) -I$(SHARED_DIR) -I$(KERN_DIR) -c $< -o $@
 
 $(BUILD_DIR)/kern_firewall.o: $(KERN_DIR)/security/firewall.c | $(BUILD_DIR)
+	$(CC_KERN) $(TARGET_KERN) -I$(SHARED_DIR) -I$(KERN_DIR) -c $< -o $@
+
+$(BUILD_DIR)/kern_compositor.o: $(KERN_DIR)/gui/compositor.c | $(BUILD_DIR)
+	$(CC_KERN) $(TARGET_KERN) -I$(SHARED_DIR) -I$(KERN_DIR) -c $< -o $@
+
+$(BUILD_DIR)/kern_anim.o: $(KERN_DIR)/gui/anim.c | $(BUILD_DIR)
+	$(CC_KERN) $(TARGET_KERN) -I$(SHARED_DIR) -I$(KERN_DIR) -c $< -o $@
+
+$(BUILD_DIR)/kern_dom.o: $(KERN_DIR)/gui/dom_engine.c | $(BUILD_DIR)
+	$(CC_KERN) $(TARGET_KERN) -I$(SHARED_DIR) -I$(KERN_DIR) -c $< -o $@
+
+$(BUILD_DIR)/kern_v8.o: $(KERN_DIR)/gui/v8_engine.c | $(BUILD_DIR)
+	$(CC_KERN) $(TARGET_KERN) -I$(SHARED_DIR) -I$(KERN_DIR) -c $< -o $@
+
+$(BUILD_DIR)/kern_py_runtime.o: $(KERN_DIR)/python/py_runtime.c | $(BUILD_DIR)
 	$(CC_KERN) $(TARGET_KERN) -I$(SHARED_DIR) -I$(KERN_DIR) -c $< -o $@
 
 # ── GUI IPC Server (replaces C compositor + Django) ─────────────────

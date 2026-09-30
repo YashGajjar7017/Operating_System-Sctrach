@@ -170,8 +170,10 @@ Write-Host "[+] VirtualBox VM '$VmName' successfully configured!" -ForegroundCol
 
 # 6. Launch the VM
 if (-not $NoStart) {
-    Write-Host "[*] Launching '$VmName' in VirtualBox..." -ForegroundColor Cyan
-    & $VBoxManage startvm $VmName
+    Write-Host "[*] Launching '$VmName' in VirtualBox GUI..." -ForegroundColor Cyan
+    & $VBoxManage startvm $VmName --type gui
+    Write-Host "[+] Xenithra OS VM is actively running!" -ForegroundColor Green
+    Write-Host "[i] Look for the 'Xenithra OS [Running]' window on your Windows taskbar or press Alt+Tab." -ForegroundColor Yellow
 }
 
 
