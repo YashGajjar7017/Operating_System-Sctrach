@@ -1,9 +1,15 @@
 <#
 .SYNOPSIS
-    Xenithra OS Automated Windows Build, Bootstrap, and Test Script
+    Xenithra OS v3.0 Automated Build, Bootstrap, and Test Script
 .DESCRIPTION
-    Compiles the UEFI Bootloader (BOOTX64.EFI) and Higher-Half Secure Kernel (kernel.elf),
-    generates the FAT32 ESP Disk Image, packages the bootable xenithra.iso, and launches QEMU.
+    Compiles the UEFI Bootloader (BOOTX64.EFI) and x86_64 Secure Kernel (kernel.elf),
+    generates the FAT32 ESP Disk Image, packages the bootable xenithra.iso, launches QEMU,
+    and optionally builds the Electron Render Engine (render_engine/).
+
+    v3.0 Changes:
+      -RenderEngine  Build the Electron + React + TypeScript render engine
+      -Shell         Start the render engine dev server (Vite port 5174)
+      -All           Build kernel + render engine
 #>
 
 param (
@@ -12,20 +18,24 @@ param (
     [switch]$VBox,
     [switch]$Clean,
     [switch]$Bootstrap,
+    [switch]$RenderEngine,   # NEW v3.0: build render_engine/
+    [switch]$Shell,          # NEW v3.0: start render engine dev server
+    [switch]$All,            # NEW v3.0: build kernel + render engine
     [string]$QemuPath = "qemu-system-x86_64"
 )
 
 $ErrorActionPreference = "Stop"
 
-$RootDir   = $PSScriptRoot
-$BuildDir  = Join-Path $RootDir "build"
-$BootDir   = Join-Path $RootDir "bootloader"
-$KernDir   = Join-Path $RootDir "kernel"
-$SharedDir = Join-Path $RootDir "shared"
-$ScriptDir   = Join-Path $RootDir "scripts"
-$ToolsDir    = Join-Path $RootDir "tools"
-$VmDir       = Join-Path $RootDir "vm"
-$ServicesDir = Join-Path $RootDir "services"
+$RootDir      = $PSScriptRoot
+$BuildDir     = Join-Path $RootDir "build"
+$BootDir      = Join-Path $RootDir "bootloader"
+$KernDir      = Join-Path $RootDir "kernel"
+$SharedDir    = Join-Path $RootDir "shared"
+$ScriptDir    = Join-Path $RootDir "scripts"
+$ToolsDir     = Join-Path $RootDir "tools"
+$VmDir        = Join-Path $RootDir "vm"
+$ServicesDir  = Join-Path $RootDir "services"
+$RenderEngDir = Join-Path $RootDir "render_engine"    # NEW v3.0
 
 # Add portable tools/ directory to PATH if present
 $LlvmBin = Join-Path $ToolsDir "llvm-mingw\bin"
@@ -53,8 +63,43 @@ if (-not (Test-Path $BuildDir)) {
 }
 
 Write-Host "==========================================================" -ForegroundColor Cyan
-Write-Host "       Xenithra OS x86_64 High-Security Build Pipeline    " -ForegroundColor Cyan
+Write-Host "    Xenithra OS v3.0 — Kernel + Render Engine Build       " -ForegroundColor Cyan
 Write-Host "==========================================================" -ForegroundColor Cyan
+
+# ── Render Engine only (-Shell flag) ──────────────────────────────────
+if ($Shell) {
+    Write-Host "[*] Starting Render Engine dev server (port 5174)..." -ForegroundColor Cyan
+    if (-not (Test-Path (Join-Path $RenderEngDir "node_modules"))) {
+        Write-Host "[*] Installing render engine dependencies..." -ForegroundColor Yellow
+        Push-Location $RenderEngDir
+        & npm install
+        Pop-Location
+    }
+    Push-Location $RenderEngDir
+    Start-Process -NoNewWindow powershell -ArgumentList "-Command", "npm run dev"
+    Write-Host "[+] Render engine started at http://localhost:5174" -ForegroundColor Green
+    Write-Host "[*] To launch Electron shell: npm start" -ForegroundColor Cyan
+    Pop-Location
+    if (-not $Run -and -not $All) { exit 0 }
+}
+
+# ── Render Engine build (-RenderEngine or -All flag) ──────────────────
+if ($RenderEngine -or $All) {
+    Write-Host "[*] Building Render Engine (Electron + React + TypeScript)..." -ForegroundColor Cyan
+    if (-not (Test-Path (Join-Path $RenderEngDir "node_modules"))) {
+        Write-Host "[*] Installing render engine npm dependencies..." -ForegroundColor Yellow
+        Push-Location $RenderEngDir
+        & npm install
+        if ($LASTEXITCODE -ne 0) { Write-Error "npm install failed"; exit 1 }
+        Pop-Location
+    }
+    Push-Location $RenderEngDir
+    & npm run build
+    if ($LASTEXITCODE -ne 0) { Write-Error "Render engine build failed"; Pop-Location; exit 1 }
+    Pop-Location
+    Write-Host "[+] Render engine built → render_engine/dist/" -ForegroundColor Green
+    if (-not $Run -and -not $All -and -not $VBox) { exit 0 }
+}
 
 # Check for required tools
 $Clang = Get-Command clang.exe -ErrorAction SilentlyContinue

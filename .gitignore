@@ -1,3 +1,4 @@
 "build/" 
 /tools
 /desktop_shell/node_modules
+/render_engine/node_modules

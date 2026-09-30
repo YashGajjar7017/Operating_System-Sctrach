@@ -1,0 +1,35 @@
+{
+  "name": "xenithra-render-engine",
+  "version": "3.0.0",
+  "description": "Xenithra OS — Separate Render Engine (Electron + React + TypeScript + Vite)",
+  "type": "module",
+  "main": "electron/main.cjs",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "start": "electron .",
+    "start:dev": "cross-env NODE_ENV=development electron . --dev",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "lucide-react": "^0.441.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "framer-motion": "^11.11.1",
+    "clsx": "^2.1.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.5.4",
+    "@types/react": "^18.3.5",
+    "@types/react-dom": "^18.3.0",
+    "@vitejs/plugin-react": "^4.3.1",
+    "cross-env": "^7.0.3",
+    "electron": "^32.0.1",
+    "typescript": "^5.5.4",
+    "vite": "^5.4.3"
+  },
+  "allowScripts": {
+    "electron@32.3.3": true,
+    "esbuild@0.21.5": true
+  }
+}

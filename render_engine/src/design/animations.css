@@ -1,0 +1,160 @@
+/**
+ * Xenithra OS v3.0 — Micro-animations & Transition Library
+ */
+
+/* ── Window Enter/Exit ───────────────────────────────────────────────────── */
+@keyframes windowEnter {
+  from { opacity: 0; transform: scale(0.94) translateY(12px); }
+  to   { opacity: 1; transform: scale(1)    translateY(0); }
+}
+@keyframes windowExit {
+  from { opacity: 1; transform: scale(1)    translateY(0); }
+  to   { opacity: 0; transform: scale(0.94) translateY(12px); }
+}
+.window-enter { animation: windowEnter 280ms cubic-bezier(0.34, 1.56, 0.64, 1) forwards; }
+.window-exit  { animation: windowExit  180ms cubic-bezier(0.4, 0, 1, 1) forwards; }
+
+/* ── Flyout / Popup Enter ────────────────────────────────────────────────── */
+@keyframes flyoutEnter {
+  from { opacity: 0; transform: scale(0.96) translateY(6px); }
+  to   { opacity: 1; transform: scale(1)    translateY(0); }
+}
+@keyframes flyoutEnterUp {
+  from { opacity: 0; transform: scale(0.96) translateY(-6px); }
+  to   { opacity: 1; transform: scale(1)    translateY(0); }
+}
+.flyout-enter    { animation: flyoutEnter   200ms cubic-bezier(0.1, 0.9, 0.2, 1) forwards; }
+.flyout-enter-up { animation: flyoutEnterUp 200ms cubic-bezier(0.1, 0.9, 0.2, 1) forwards; }
+
+/* ── Fade In ─────────────────────────────────────────────────────────────── */
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes fadeInLeft {
+  from { opacity: 0; transform: translateX(-10px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+.fade-in     { animation: fadeIn     200ms var(--ease-smooth) forwards; }
+.fade-in-up  { animation: fadeInUp   250ms var(--ease-smooth) forwards; }
+.fade-in-left{ animation: fadeInLeft 250ms var(--ease-smooth) forwards; }
+
+/* ── Slide ───────────────────────────────────────────────────────────────── */
+@keyframes slideInBottom {
+  from { opacity: 0; transform: translateY(100%); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes slideInTop {
+  from { opacity: 0; transform: translateY(-100%); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.slide-in-bottom { animation: slideInBottom 320ms var(--ease-spring) forwards; }
+.slide-in-top    { animation: slideInTop    320ms var(--ease-spring) forwards; }
+
+/* ── Toast / Notification ────────────────────────────────────────────────── */
+@keyframes toastEnter {
+  from { opacity: 0; transform: translateX(100%) scale(0.9); }
+  to   { opacity: 1; transform: translateX(0) scale(1); }
+}
+@keyframes toastExit {
+  from { opacity: 1; transform: translateX(0) scale(1); }
+  to   { opacity: 0; transform: translateX(100%) scale(0.9); }
+}
+.toast-enter { animation: toastEnter 300ms var(--ease-spring) forwards; }
+.toast-exit  { animation: toastExit  200ms var(--ease-smooth) forwards; }
+
+/* ── Pulse Glow ─────────────────────────────────────────────────────────── */
+@keyframes pulseGlow {
+  0%, 100% { box-shadow: 0 0 8px rgba(96,165,250,0.3); }
+  50%       { box-shadow: 0 0 20px rgba(96,165,250,0.6), 0 0 40px rgba(96,165,250,0.2); }
+}
+.pulse-glow { animation: pulseGlow 2s ease-in-out infinite; }
+
+/* ── Spin ────────────────────────────────────────────────────────────────── */
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+.spin { animation: spin 1s linear infinite; }
+.spin-slow { animation: spin 2s linear infinite; }
+
+/* ── Progress Bar Fill ───────────────────────────────────────────────────── */
+@keyframes progressFill {
+  from { width: 0%; }
+}
+.progress-animate { animation: progressFill 600ms var(--ease-out) forwards; }
+
+/* ── Skeleton Shimmer ────────────────────────────────────────────────────── */
+@keyframes shimmer {
+  from { background-position: -200% 0; }
+  to   { background-position: 200% 0; }
+}
+.skeleton {
+  background: linear-gradient(90deg,
+    rgba(255,255,255,0.04) 25%,
+    rgba(255,255,255,0.09) 50%,
+    rgba(255,255,255,0.04) 75%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.5s ease-in-out infinite;
+  border-radius: var(--radius-sm);
+}
+
+/* ── Taskbar Icon Animations ─────────────────────────────────────────────── */
+@keyframes iconBounce {
+  0%, 100% { transform: translateY(0); }
+  40%       { transform: translateY(-6px); }
+  60%       { transform: translateY(-3px); }
+}
+.icon-bounce { animation: iconBounce 0.5s var(--ease-spring); }
+
+/* ── Waveform ────────────────────────────────────────────────────────────── */
+@keyframes waveBar {
+  0%, 100% { transform: scaleY(0.2); }
+  50%       { transform: scaleY(1.0); }
+}
+.wave-bar { animation: waveBar var(--dur, 0.8s) ease-in-out infinite; transform-origin: bottom; }
+
+/* ── Hover Lift ──────────────────────────────────────────────────────────── */
+.hover-lift { transition: transform var(--dur-fast) var(--ease-spring); }
+.hover-lift:hover { transform: translateY(-2px); }
+.hover-lift:active { transform: scale(0.97); }
+
+/* ── Taskbar Pill Hover ──────────────────────────────────────────────────── */
+.taskbar-pill {
+  transition: all var(--dur-fast) var(--ease-smooth);
+  position: relative;
+}
+.taskbar-pill::after {
+  content: '';
+  position: absolute;
+  bottom: -3px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 0;
+  height: 3px;
+  border-radius: 2px;
+  background: var(--clr-accent-primary);
+  transition: width var(--dur-fast) var(--ease-spring);
+}
+.taskbar-pill.active::after { width: 18px; }
+.taskbar-pill:hover { background: rgba(255,255,255,0.08) !important; }
+.taskbar-pill:active { transform: scale(0.94); }
+
+/* ── Gradient Text ───────────────────────────────────────────────────────── */
+.gradient-text {
+  background: var(--grad-hero);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* ── Glow Line ───────────────────────────────────────────────────────────── */
+.glow-line {
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--clr-accent-primary), transparent);
+}

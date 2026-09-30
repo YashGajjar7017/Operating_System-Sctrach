@@ -1,151 +1,245 @@
-# Xenithra OS: High-Security 64-bit Graphical Operating System
+# Xenithra OS v3.0 — High-Security 64-bit OS with Separate Render Engine
 
-A custom, modern x86_64 Operating System built from scratch with a sleek Windows-style boot experience, hardware-enforced **Session Hijacking Prevention**, an integrated **Private Firewall**, and a **32-bit Graphical Window Compositor & Desktop Environment**.
+A custom x86_64 Operating System built from scratch, redesigned in v3.0 with a **strict architectural separation**:
 
----
-
-## 🛡️ Security Architecture & Anti-Hijack Guard
-
-Xenithra OS is engineered from the ground up for resilience against memory exploitation, privilege escalation, and session interception:
-
-1. **Anti-Session-Hijacking Subsystem (`kernel/security/session.c`)**:
-   - **128-bit Cryptographically Random Session Tokens**: Generated using hardware CPU entropy sources (`RDRAND`/`RDSEED` with jitter state mixing fallback).
-   - **Strict Process ID & Capability Binding**: Tokens are bound to `(SessionID, PID, UID, RingLevel, CapabilityBitmask, IP)`. If a rogue or unauthorized process attempts to borrow or forge a token, access is instantly blocked, the event is logged, and the anomalous session is revoked.
-2. **Hardware SMEP & SMAP Enforcement**:
-   - Supervisor Mode Execution Prevention (`CR4.bit20`) and Supervisor Mode Access Prevention (`CR4.bit21`) prevent kernel-mode execution of userland shellcode or arbitrary memory hijacking.
-3. **Integrated Private Firewall (`kernel/security/firewall.c`)**:
-   - Stateful packet filtering engine (TCP, UDP, ICMP).
-   - Stealth mode dropping unsolicited probe requests and mitigating port-scanners.
-   - Built-in live rules table management and security stats.
+- **C Kernel** → Pure backend: hardware, scheduling, security, IPC. **No GUI drawing.**
+- **Render Engine** → Separate Electron + React + TypeScript process. **All rendering here.**
+- **V8/Chromium** → Acts as the DWM compositor, replacing legacy C framebuffer code.
 
 ---
 
-## 🖥️ Graphical Desktop & Declarative DOM UI Engine
-
-- **32-bit Window Compositor (`kernel/gui/compositor.c`)**:
-  - Double-buffered software rendering engine with Mica/Acrylic dark aesthetics.
-  - Full Window Management: Titlebars, Close `[X]`, Maximize/Restore `[+]`, Minimize `[-]`, window dragging, and z-order focus stacking.
-  - Windows 11-style centered Taskbar with Start Menu, active app pills, security status badge, and clock.
-  - Smooth mouse cursor compositing.
-- **Declarative HTML/CSS DOM Engine (`kernel/gui/dom_engine.c`)**:
-  - Declarative markup UI layout engine in C that renders modern flex containers, styled cards, rounded buttons, progress bars, and typography without the security overhead of full web browsers.
-  - **Locked Kiosk Security**: Developer inspect tools / DOM tampering are disabled by design.
-- **Built-in Applications**:
-  - **Xenithra Security & Firewall Center**: Real-time monitor for active sessions, blocked hijack attempts, and firewall packet stats.
-  - **Diagnostic Console**: Kernel telemetry and hardware diagnostic logs.
-
----
-
-## 📁 Directory Structure
+## 🏗️ v3.0 Architecture — Four Layers
 
 ```
-c:\Data\Coding\OS_Kernal
-├── bootloader/             # UEFI Freestanding Bootloader (PE32+)
-│   ├── efi.h               # Complete UEFI 2.8 freestanding specification header
-│   ├── gop.h & gop.c       # Double-buffered GOP rendering engine
-│   ├── ui.h & ui.c         # Sleek Windows-style graphical boot selector UI
-│   └── main.c              # EfiMain, ELF64 loader, memory map, ExitBootServices
-├── kernel/                 # 64-bit Secure Kernel
-│   ├── arch/x86_64/
-│   │   └── entry.asm       # 64-bit kernel entry point (System V AMD64 ABI)
-│   ├── security/
-│   │   ├── session.h & .c  # 128-bit Anti-Session-Hijack Guard & SMEP/SMAP
-│   │   └── firewall.h & .c # Private stateful packet filter & network guard
+┌─────────────────────────────────────────────────────────────────────┐
+│  LAYER 4 — RENDER ENGINE  (render_engine/)                          │
+│  Electron + React 18 + TypeScript + Vite                            │
+│  • Fluent Design: Mica / Acrylic shaders (CSS backdrop-filter)      │
+│  • Spring-physics window animations                                 │
+│  • NetworkPanel: WiFi, Ethernet, VPN, DNS, Firewall rules           │
+│  • ManagementPanel: Device Manager, Performance, Event Log          │
+│  • Start Menu, Action Center, Toast notifications                   │
+│  • Connects to kernel via  \\.\pipe\XenithraGUI  (Named Pipe)       │
+└───────────────────────────┬─────────────────────────────────────────┘
+                            │ Named Pipe IPC (newline-delimited JSON)
+┌───────────────────────────▼─────────────────────────────────────────┐
+│  LAYER 3 — SERVICES  (services/)                                    │
+│  C daemons running as kernel threads in Session 0                   │
+│  • netmgr/   — DHCP client, DNS resolver, routing table             │
+│  • drvmgr/   — PCI enumeration, PnP driver manager                  │
+│  • panelmgr/ — Telemetry collector → GUI IPC publisher             │
+│  • dwm_proxy, sysmain, mmcss, audiosrv, wmi                         │
+└───────────────────────────┬─────────────────────────────────────────┘
+                            │ Syscall / direct call
+┌───────────────────────────▼─────────────────────────────────────────┐
+│  LAYER 2 — KERNEL  (kernel/)   ← C ONLY, ZERO GUI DRAWING           │
+│  • arch/x86_64: GDT/IDT/TSS/APIC/SMP                               │
+│  • mm:          VMM, PFN database, 64MB kernel heap                 │
+│  • sched:       RTOS 6-level priority scheduler + DPC queue         │
+│  • security:    Session guard (128-bit), SMEP/SMAP, Firewall        │
+│  • drivers:     PS/2, Sound, e1000, RTL8139, xHCI, VBE, ACPI       │
+│  • gui/gui_ipc: Named Pipe IPC server (ONLY gui file kept)          │
+└───────────────────────────┬─────────────────────────────────────────┘
+                            │ UEFI Handoff
+┌───────────────────────────▼─────────────────────────────────────────┐
+│  LAYER 1 — BOOTLOADER  (bootloader/)   ← UNCHANGED                  │
+│  • UEFI PE32+ EFI application                                       │
+│  • GOP graphical boot selector                                      │
+│  • ELF64 kernel loader + memory map                                 │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## 📁 Directory Structure (v3.0)
+
+```
+OS_Kernal/
+├── bootloader/                    # UEFI bootloader (C, UNCHANGED)
+├── kernel/                        # 64-bit kernel — C ONLY, NO GUI
+│   ├── arch/x86_64/               # GDT, IDT, APIC, SMP trampoline
+│   ├── mm/                        # VMM, PFN database, heap
+│   ├── exec/                      # KPCR, SMSS, kshell
+│   ├── sched/                     # RTOS priority scheduler
+│   ├── security/                  # session.c, firewall.c
+│   ├── drivers/
+│   │   ├── ps2.c/.h               # PS/2 mouse + keyboard
+│   │   ├── sound.c/.h             # PC Speaker / HDA audio
+│   │   ├── net/
+│   │   │   ├── e1000.h            # ★ NEW: Intel e1000 Gigabit NIC
+│   │   │   └── rtl8139.h          # ★ NEW: Realtek RTL8139 NIC
+│   │   ├── gpu/
+│   │   │   └── vbe.h              # ★ NEW: VESA VBE framebuffer (boot only)
+│   │   ├── usb/
+│   │   │   └── xhci.h             # ★ NEW: USB 3.0 xHCI controller
+│   │   └── acpi/
+│   │       └── acpi.h             # ★ NEW: ACPI power management
 │   ├── gui/
-│   │   ├── compositor.h/.c # 32-bit Window Compositor, Taskbar, & Start Menu
-│   │   └── dom_engine.h/.c # Declarative HTML/CSS DOM UI layout engine
-│   ├── apps/
-│   │   ├── firewall_app.h/.c # Graphical Firewall & Security Center App
-│   │   └── terminal_app.h/.c # Secure Diagnostics Console App
-│   ├── linker.ld           # Higher-half 64-bit ELF linker script (0xFFFFFFFF80000000)
-│   └── main.c              # Kernel main & system initialization
-├── shared/                 # Shared ABI headers
-│   ├── bootinfo.h          # XenithraBootInfo & Framebuffer structs
-│   └── font.h & font.c     # 8x16 bitmap font glyph table
-├── scripts/                # Python Build & Simulation Utilities
-│   ├── bootstrap_tools.py  # Portable toolchain installer (bypasses winget issues)
-│   ├── build_disk.py       # Pure-Python FAT32 UEFI ESP disk image generator
-│   ├── build_iso.py        # Standalone El Torito UEFI bootable ISO builder
-│   └── download_ovmf.py    # OVMF UEFI firmware fetcher
-├── build.ps1               # PowerShell automated build & test script
-├── Makefile                # Multi-platform GNU Makefile
-└── README.md               # Project documentation
+│   │   └── gui_ipc.c/.h           # Named Pipe IPC server (ONLY gui file)
+│   │   # REMOVED: compositor.c, v8_engine.c, dom_engine.c, anim.c
+│   ├── apps/                      # Syscall providers (IPC-backed, no draw)
+│   └── main.c                     # ★ UPDATED: no C drawing, adds new drivers
+│
+├── render_engine/                 # ★ NEW: Separate Render Engine
+│   ├── electron/
+│   │   ├── main.cjs               # Electron main process
+│   │   ├── preload.cjs            # Context bridge (xenithra API)
+│   │   └── ipc_bridge.cjs         # Named Pipe ↔ IPC relay
+│   ├── src/
+│   │   ├── design/
+│   │   │   ├── tokens.css         # All CSS custom properties
+│   │   │   ├── fluent.css         # Mica/Acrylic/Glass components
+│   │   │   └── animations.css     # Micro-animations library
+│   │   ├── components/
+│   │   │   ├── DesktopShell.tsx   # Main OS shell
+│   │   │   ├── NetworkPanel.tsx   # ★ NEW: Network management
+│   │   │   └── ManagementPanel.tsx# ★ NEW: System management
+│   │   ├── types.ts               # ★ EXTENDED: network + driver types
+│   │   ├── index.css              # CSS entry (imports all layers)
+│   │   └── main.tsx               # React root
+│   ├── package.json
+│   ├── vite.config.ts             # Port 5174
+│   └── tsconfig.json
+│
+├── services/                      # C backend daemons
+│   ├── netmgr/
+│   │   └── netmgr.h               # ★ NEW: DHCP, DNS, routing
+│   ├── drvmgr/
+│   │   └── drvmgr.h               # ★ NEW: PCI PnP driver manager
+│   ├── panelmgr/
+│   │   └── panelmgr.h             # ★ NEW: Telemetry → IPC publisher
+│   ├── dwm_proxy/                 # DWM compositor proxy
+│   ├── sysmain/                   # Session lifecycle
+│   ├── mmcss/                     # Multimedia Class Scheduler
+│   ├── audiosrv/                  # Audio service
+│   └── wmi/                       # WMI provider
+│
+├── shared/                        # ABI headers (bootinfo.h, font.h)
+├── desktop_shell/                 # Legacy shell (kept for reference)
+├── build.ps1                      # ★ UPDATED: builds kernel + render_engine
+├── Makefile                       # GNU Makefile (Linux/macOS)
+└── README.md                      # This file
 ```
+
+---
+
+## 🛡️ Security Architecture (UNCHANGED)
+
+1. **Anti-Session-Hijacking** (`kernel/security/session.c`):
+   - 128-bit cryptographic session tokens (RDRAND/RDSEED + jitter)
+   - Token bound to (SessionID, PID, UID, Ring, Capabilities, IP)
+
+2. **Hardware SMEP + SMAP** (`CR4.bit20/21`):
+   - Prevents ring-3 shellcode execution in kernel mode
+
+3. **Kernel Private Firewall** (`kernel/security/firewall.c`):
+   - Stateful TCP/UDP/ICMP packet filter
+   - Managed via `NetworkPanel → Firewall` tab in Render Engine
+
+---
+
+## ★ New in v3.0
+
+| Feature | Description |
+|---------|-------------|
+| `render_engine/` | Separate Electron + React + TypeScript render engine |
+| `NetworkPanel` | WiFi scanner, VPN, DNS, Firewall UI — fully interactive |
+| `ManagementPanel` | Device Manager, Performance graphs, Event Log, Startup |
+| `e1000` driver | Intel 82540EM/82574L Gigabit NIC (QEMU compatible) |
+| `rtl8139` driver | Realtek RTL8139 Fast Ethernet (QEMU fallback) |
+| `xhci` driver | USB 3.0 xHCI host controller |
+| `vbe` driver | VESA framebuffer (boot splash + kernel panic only) |
+| `acpi` driver | ACPI power management (S0-S5, battery, reboot/shutdown) |
+| `netmgr` service | DHCP client, DNS resolver, routing table daemon |
+| `drvmgr` service | PCI bus scanner, PnP driver loader, hot-plug support |
+| `panelmgr` service | 1-second telemetry publisher → ManagementPanel |
+| Fluent Design System | Mica/Acrylic shaders, Inter/Outfit fonts, spring animations |
+| Web3 Integration | EIP-6963 wallets, ENS, IPFS — in `Web3App` |
 
 ---
 
 ## 🚀 Building and Running
 
-### 1. Toolchain Setup (No Admin/Winget Required)
+### 1. Install dependencies
 
-If `winget` fails on your system, run the automated portable toolchain bootstrapper:
 ```powershell
-# Automatically downloads portable GCC/Clang, NASM, and OVMF into tools/
+# Kernel + Bootloader toolchain
 python scripts/bootstrap_tools.py
+
+# Render Engine (NEW — separate from desktop_shell)
+cd render_engine
+npm install
+cd ..
 ```
-Or with `build.ps1`:
+
+### 2. Build everything
+
 ```powershell
-.\build.ps1 -Bootstrap
+# Build kernel ELF + UEFI bootloader + disk image
+.\build.ps1
+
+# Build render engine (dev mode)
+.\build.ps1 -RenderEngine
+
+# Build all layers
+.\build.ps1 -All
 ```
 
-*(Alternatively, install via winget: `winget install LLVM.LLVM NASM.NASM SoftwareFreedomConservancy.QEMU`)*
+### 3. Run in QEMU
 
----
+```powershell
+# Boot kernel in QEMU
+.\build.ps1 -Run
 
-### 2. Build Disk Image & ISO:
+# Start render engine separately (dev mode, port 5174)
+.\build.ps1 -Shell
+```
 
-- **On Windows (PowerShell):**
-  ```powershell
-  # Builds BOOTX64.EFI, kernel.elf, build/disk.img, and build/xenithra.iso
-  .\build.ps1
-  ```
-- **On Linux / macOS:**
-  ```bash
-  make
-  ```
+### 4. Test in VirtualBox
 
----
-
-### 3. Test in QEMU / VirtualBox:
-
-- **Test in VirtualBox (Automated):**
-  ```powershell
-  .\build.ps1 -VBox
-  ```
-  *(Or run `powershell -File vm/setup_vbox.ps1`)*
-
-- **Test Disk Image in QEMU:**
-  ```powershell
-  .\build.ps1 -Run
-  ```
-- **Test Bootable ISO (`xenithra.iso`) in QEMU:**
-  ```powershell
-  .\build.ps1 -Run -Iso
-  ```
-
----
-
-## 💿 VirtualBox Deployment & VM Configuration
-
-We provide a pre-configured VirtualBox machine file: **[`vm/XenithraOS.vbox`](file:///c:/Data/Coding/OS_Kernal/vm/XenithraOS.vbox)**.
-
-### Method A: One-Click Automatic Setup
-Run:
 ```powershell
 .\build.ps1 -VBox
 ```
-This automatically registers the VM with optimal parameters (64-bit UEFI enabled, 2GB RAM, 2 CPUs, 128MB VRAM, AHCI SATA controller), attaches `build/xenithra.iso`, and starts the VM.
 
-### Method B: Manual VirtualBox GUI Import
-1. Open Oracle VM VirtualBox.
-2. Click **Machine -> Add...** (`Ctrl+A`).
-3. Select **`vm/XenithraOS.vbox`**.
-4. Click **Start** to boot Xenithra OS directly.
+---
 
-### Method C: Create VM from Scratch
-- **OS Type**: `Other_64` (64-bit).
-- **RAM**: `2048 MB` (2 GB).
-- **Processors**: `2 CPUs`.
-- **System -> Motherboard -> Extended Features**: Check **Enable EFI (special OSes only)**.
-- **Display -> Video Memory**: `128 MB`.
-- **Storage**: Attach `build/xenithra.iso` to the Optical Drive.
+## 🖥️ Render Engine Architecture
+
+```
+User Input / Event
+      ↓
+UI Thread / Dispatcher  →  React Tree Mutation
+      ↓
+Layout pass (CSS Flexbox)
+      ↓
+WebGL + Canvas Draw Calls  +  DirectWrite (fonts via canvas)
+      ↓
+Electron BrowserWindow (Chromium GPU compositor)
+      ↓
+Named Pipe \\.\pipe\XenithraGUI
+      ↓
+Kernel IPC Server (gui_ipc.c)
+      ↓
+Kernel Subsystems (security, network, scheduler, drivers)
+```
+
+### Pixel Shader Pipeline (CSS)
+- **Mica Shader**: `backdrop-filter: blur(40px) saturate(160%)` — pre-blurred bg
+- **Acrylic Shader**: `backdrop-filter: blur(24px) saturate(200%)` — dynamic blur
+- **Drop shadows**: `box-shadow` with multi-layer depth
+- **Rounded corners**: `border-radius` matching Windows 11 geometry
+
+---
+
+## 💿 VirtualBox / QEMU Configuration
+
+| Setting | Value |
+|---------|-------|
+| OS Type | Other 64-bit |
+| RAM | 2048 MB |
+| CPUs | 2 |
+| EFI | Enabled |
+| VRAM | 128 MB |
+| Network | e1000 (Intel) adapter |
+| USB | xHCI (USB 3.0) |
+| Display | VBoxVGA / VMSVGA |

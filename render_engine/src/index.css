@@ -1,0 +1,104 @@
+/**
+ * Xenithra OS v3.0 — Render Engine — Global CSS Entry
+ * Imports all design layers in order.
+ */
+
+/* 1. Design Tokens */
+@import './design/tokens.css';
+
+/* 2. Fluent Design System */
+@import './design/fluent.css';
+
+/* 3. Micro-animations */
+@import './design/animations.css';
+
+/* ── Reset & Base ────────────────────────────────────────────────────────── */
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html, body, #root {
+  width: 100vw;
+  height: 100vh;
+  overflow: hidden;
+  background: var(--bg-base);
+  color: var(--text-primary);
+  font-family: var(--font-ui);
+  font-size: var(--text-base);
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  user-select: none;
+}
+
+/* ── Cursor ──────────────────────────────────────────────────────────────── */
+* { cursor: default; }
+button, a, [role="button"] { cursor: pointer; }
+input, textarea { cursor: text; user-select: text; }
+
+/* ── Focus Ring ──────────────────────────────────────────────────────────── */
+:focus-visible {
+  outline: 2px solid rgba(96, 165, 250, 0.7);
+  outline-offset: 2px;
+}
+:focus:not(:focus-visible) { outline: none; }
+
+/* ── Desktop background ──────────────────────────────────────────────────── */
+.desktop-bg {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-desktop);
+  background:
+    var(--grad-glow-blue),
+    var(--grad-glow-purple),
+    radial-gradient(ellipse at 80% 80%, rgba(96,165,250,0.07) 0%, transparent 60%),
+    linear-gradient(160deg, hsl(225,35%,5%) 0%, hsl(235,30%,3%) 100%);
+}
+
+/* ── Wallpaper variants ───────────────────────────────────────────────────── */
+.wallpaper-cosmos {
+  background:
+    radial-gradient(ellipse at 30% 20%, rgba(167,139,250,0.18) 0%, transparent 50%),
+    radial-gradient(ellipse at 70% 80%, rgba(96,165,250,0.15) 0%, transparent 50%),
+    linear-gradient(160deg, hsl(240,40%,5%) 0%, hsl(260,35%,3%) 100%);
+}
+
+.wallpaper-cyber {
+  background:
+    radial-gradient(ellipse at 50% 0%, rgba(0,212,255,0.15) 0%, transparent 60%),
+    radial-gradient(ellipse at 80% 100%, rgba(120,40,200,0.15) 0%, transparent 50%),
+    linear-gradient(160deg, hsl(220,40%,4%) 0%, hsl(200,35%,3%) 100%);
+}
+
+.wallpaper-bloom {
+  background:
+    radial-gradient(ellipse at 20% 50%, rgba(244,114,182,0.12) 0%, transparent 50%),
+    radial-gradient(ellipse at 80% 30%, rgba(96,165,250,0.12) 0%, transparent 50%),
+    radial-gradient(ellipse at 50% 100%, rgba(167,139,250,0.10) 0%, transparent 50%),
+    linear-gradient(160deg, hsl(230,35%,5%) 0%, hsl(250,30%,3%) 100%);
+}
+
+.wallpaper-mist {
+  background:
+    radial-gradient(ellipse at 50% 50%, rgba(96,165,250,0.08) 0%, transparent 70%),
+    linear-gradient(160deg, hsl(220,28%,6%) 0%, hsl(220,22%,4%) 100%);
+}
+
+/* ── Stagger children ────────────────────────────────────────────────────── */
+.stagger > *:nth-child(1)  { animation-delay: 0ms; }
+.stagger > *:nth-child(2)  { animation-delay: 40ms; }
+.stagger > *:nth-child(3)  { animation-delay: 80ms; }
+.stagger > *:nth-child(4)  { animation-delay: 120ms; }
+.stagger > *:nth-child(5)  { animation-delay: 160ms; }
+.stagger > *:nth-child(6)  { animation-delay: 200ms; }
+.stagger > *:nth-child(7)  { animation-delay: 240ms; }
+.stagger > *:nth-child(8)  { animation-delay: 280ms; }
+.stagger > *:nth-child(9)  { animation-delay: 320ms; }
+.stagger > *:nth-child(10) { animation-delay: 360ms; }
+
+/* ── Glow border on active window ────────────────────────────────────────── */
+.window-active-border {
+  box-shadow: var(--shadow-window), 0 0 0 1px rgba(96,165,250,0.25);
+}
