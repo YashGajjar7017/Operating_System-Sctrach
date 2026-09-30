@@ -10,5 +10,6 @@
 
 Window* diskclone_app_launch(void);
 void diskclone_app_tick(void);
+void diskclone_app_init(void);
 
 #endif /* _KERNEL_APPS_DISKCLONE_APP_H_ */

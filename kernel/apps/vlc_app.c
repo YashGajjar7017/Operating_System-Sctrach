@@ -384,3 +384,6 @@ Window* vlc_app_launch(void) {
     }
     return win;
 }
+
+void vlc_app_init(void) {
+}

@@ -10,5 +10,6 @@
 
 Window* taskmgr_app_launch(void);
 void    taskmgr_tick(void);
+void    taskmgr_app_init(void);
 
 #endif /* _KERNEL_APPS_TASKMGR_APP_H_ */

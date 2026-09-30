@@ -142,3 +142,6 @@ Window* firewall_app_launch(void) {
     }
     return win;
 }
+
+void firewall_app_init(void) {
+}

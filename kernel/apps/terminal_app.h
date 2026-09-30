@@ -10,5 +10,6 @@
 
 Window* terminal_app_launch(void);
 void    terminal_input_char(char c);
+void    terminal_app_init(void);
 
 #endif /* _KERNEL_APPS_TERMINAL_APP_H_ */

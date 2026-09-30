@@ -191,12 +191,12 @@ void kmain(XenithraBootInfo *boot_info)
     acpi_enable();
 
     /* 19. [NEW v3.0] VBE framebuffer — boot splash while Electron loads */
-    if (g_kernel_boot_info.framebuffer.base) {
+    if (g_kernel_boot_info.framebuffer.base_address) {
         vbe_init(
-            g_kernel_boot_info.framebuffer.base,
+            g_kernel_boot_info.framebuffer.base_address,
             screen_w, screen_h,
-            g_kernel_boot_info.framebuffer.pitch,
-            g_kernel_boot_info.framebuffer.bpp
+            g_kernel_boot_info.framebuffer.pixels_per_scanline * 4,
+            32
         );
         vbe_draw_boot_splash("Initializing Xenithra OS v3.0...", 10);
     }

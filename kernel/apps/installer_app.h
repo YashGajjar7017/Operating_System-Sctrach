@@ -10,5 +10,6 @@
 
 Window* installer_app_launch(void);
 void installer_app_tick(void);
+void installer_app_init(void);
 
 #endif /* _KERNEL_APPS_INSTALLER_APP_H_ */

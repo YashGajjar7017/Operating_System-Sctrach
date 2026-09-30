@@ -63,10 +63,10 @@ if (-not (Test-Path $BuildDir)) {
 }
 
 Write-Host "==========================================================" -ForegroundColor Cyan
-Write-Host "    Xenithra OS v3.0 — Kernel + Render Engine Build       " -ForegroundColor Cyan
+Write-Host "    Xenithra OS v3.0 -- Kernel + Render Engine Build       " -ForegroundColor Cyan
 Write-Host "==========================================================" -ForegroundColor Cyan
 
-# ── Render Engine only (-Shell flag) ──────────────────────────────────
+# -- Render Engine only (-Shell flag) ----------------------------------
 if ($Shell) {
     Write-Host "[*] Starting Render Engine dev server (port 5174)..." -ForegroundColor Cyan
     if (-not (Test-Path (Join-Path $RenderEngDir "node_modules"))) {
@@ -83,7 +83,7 @@ if ($Shell) {
     if (-not $Run -and -not $All) { exit 0 }
 }
 
-# ── Render Engine build (-RenderEngine or -All flag) ──────────────────
+# -- Render Engine build (-RenderEngine or -All flag) ------------------
 if ($RenderEngine -or $All) {
     Write-Host "[*] Building Render Engine (Electron + React + TypeScript)..." -ForegroundColor Cyan
     if (-not (Test-Path (Join-Path $RenderEngDir "node_modules"))) {
@@ -97,7 +97,7 @@ if ($RenderEngine -or $All) {
     & npm run build
     if ($LASTEXITCODE -ne 0) { Write-Error "Render engine build failed"; Pop-Location; exit 1 }
     Pop-Location
-    Write-Host "[+] Render engine built → render_engine/dist/" -ForegroundColor Green
+    Write-Host "[+] Render engine built -> render_engine/dist/" -ForegroundColor Green
     if (-not $Run -and -not $All -and -not $VBox) { exit 0 }
 }
 
@@ -226,6 +226,14 @@ $KernelSources = @(
     @{ Src = (Join-Path $KernDir "apps\vlc_app.c");       Obj = (Join-Path $BuildDir "kern_app_vlc.o") },
     @{ Src = (Join-Path $KernDir "apps\installer_app.c"); Obj = (Join-Path $BuildDir "kern_app_installer.o") },
     @{ Src = (Join-Path $KernDir "apps\diskclone_app.c"); Obj = (Join-Path $BuildDir "kern_app_diskclone.o") },
+    @{ Src = (Join-Path $KernDir "drivers\gpu\vbe.c");    Obj = (Join-Path $BuildDir "kern_vbe.o") },
+    @{ Src = (Join-Path $KernDir "drivers\acpi\acpi.c");  Obj = (Join-Path $BuildDir "kern_acpi.o") },
+    @{ Src = (Join-Path $KernDir "drivers\net\e1000.c");  Obj = (Join-Path $BuildDir "kern_e1000.o") },
+    @{ Src = (Join-Path $KernDir "drivers\net\rtl8139.c");Obj = (Join-Path $BuildDir "kern_rtl8139.o") },
+    @{ Src = (Join-Path $KernDir "drivers\usb\xhci.c");   Obj = (Join-Path $BuildDir "kern_xhci.o") },
+    @{ Src = (Join-Path $ServicesDir "drvmgr\drvmgr.c");  Obj = (Join-Path $BuildDir "svc_drvmgr.o") },
+    @{ Src = (Join-Path $ServicesDir "netmgr\netmgr.c");  Obj = (Join-Path $BuildDir "svc_netmgr.o") },
+    @{ Src = (Join-Path $ServicesDir "panelmgr\panelmgr.c"); Obj = (Join-Path $BuildDir "svc_panelmgr.o") },
     @{ Src = (Join-Path $KernDir "kstring.c");            Obj = (Join-Path $BuildDir "kern_string.o") },
     @{ Src = (Join-Path $SharedDir "font.c");             Obj = (Join-Path $BuildDir "kern_font.o") }
 )

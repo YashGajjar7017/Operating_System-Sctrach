@@ -273,3 +273,6 @@ void browser_app_search(const char *query) {
     strcpy(g_command_input, query);
     browser_app_launch_django(8000);
 }
+
+void browser_app_init(void) {
+}

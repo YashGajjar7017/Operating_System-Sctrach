@@ -10,5 +10,6 @@
 
 Window* explorer_app_launch(void);
 void    explorer_navigate_to(const char *path);
+void    explorer_app_init(void);
 
 #endif /* _KERNEL_APPS_EXPLORER_APP_H_ */

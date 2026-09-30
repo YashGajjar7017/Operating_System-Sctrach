@@ -15,5 +15,6 @@ void browser_app_launch_django(uint16_t port);
 void browser_app_launch(void);
 void browser_app_navigate(const char *url);
 void browser_app_search(const char *query);
+void browser_app_init(void);
 
 #endif /* _KERNEL_APPS_BROWSER_APP_H_ */

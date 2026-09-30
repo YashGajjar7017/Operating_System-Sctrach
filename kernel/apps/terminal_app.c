@@ -182,3 +182,6 @@ Window* terminal_app_launch(void) {
     }
     return win;
 }
+
+void terminal_app_init(void) {
+}

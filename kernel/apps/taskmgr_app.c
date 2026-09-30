@@ -337,3 +337,6 @@ Window* taskmgr_app_launch(void) {
     }
     return win;
 }
+
+void taskmgr_app_init(void) {
+}

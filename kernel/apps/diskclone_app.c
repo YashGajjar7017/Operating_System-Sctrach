@@ -228,3 +228,6 @@ Window* diskclone_app_launch(void) {
     }
     return win;
 }
+
+void diskclone_app_init(void) {
+}

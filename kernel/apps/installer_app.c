@@ -221,3 +221,6 @@ Window* installer_app_launch(void) {
     }
     return win;
 }
+
+void installer_app_init(void) {
+}

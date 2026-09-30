@@ -10,5 +10,6 @@
 
 Window* vlc_app_launch(void);
 void vlc_app_tick(void);
+void vlc_app_init(void);
 
 #endif /* _KERNEL_APPS_VLC_APP_H_ */

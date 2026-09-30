@@ -10,5 +10,6 @@
 
 /* Launch the Firewall & Security Center Window */
 Window* firewall_app_launch(void);
+void    firewall_app_init(void);
 
 #endif /* _KERNEL_APPS_FIREWALL_APP_H_ */

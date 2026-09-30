@@ -328,3 +328,6 @@ Window* explorer_app_launch(void) {
     }
     return win;
 }
+
+void explorer_app_init(void) {
+}
